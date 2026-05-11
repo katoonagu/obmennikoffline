@@ -1,5 +1,4 @@
-import { constants } from 'node:fs';
-import { access, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { renderAddressPoolCsv, type AddressPoolCsvRow } from './addressPoolCsv.js';
@@ -12,9 +11,43 @@ interface CliOptions {
   force: boolean;
 }
 
+interface CliIo {
+  writeStdout: (message: string) => void;
+  writeStderr: (message: string) => void;
+}
+
 export async function generateAddressPoolCli(
   argv = process.argv.slice(2),
   env = process.env,
+): Promise<void> {
+  await generateAddressPool(argv, env, {
+    writeStdout: (message) => process.stdout.write(message),
+    writeStderr: (message) => process.stderr.write(message),
+  });
+}
+
+export async function runGenerateAddressPoolCli(
+  argv = process.argv.slice(2),
+  env = process.env,
+  io: CliIo = {
+    writeStdout: (message) => process.stdout.write(message),
+    writeStderr: (message) => process.stderr.write(message),
+  },
+): Promise<number> {
+  try {
+    await generateAddressPool(argv, env, io);
+    return 0;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    io.writeStderr(`${message}\n`);
+    return 1;
+  }
+}
+
+async function generateAddressPool(
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+  io: CliIo,
 ): Promise<void> {
   const mnemonic = env.TRON_MNEMONIC;
 
@@ -24,10 +57,6 @@ export async function generateAddressPoolCli(
 
   const options = parseArgs(argv);
   const outputPath = path.resolve(options.outputPath);
-
-  if (!options.force && (await pathExists(outputPath))) {
-    throw new Error(`${outputPath} already exists; pass --force to overwrite`);
-  }
 
   const rows: AddressPoolCsvRow[] = Array.from(
     { length: options.count },
@@ -44,8 +73,20 @@ export async function generateAddressPoolCli(
     },
   );
 
-  await writeFile(outputPath, renderAddressPoolCsv(rows), { encoding: 'utf8' });
-  process.stdout.write(
+  try {
+    await writeFile(outputPath, renderAddressPoolCsv(rows), {
+      encoding: 'utf8',
+      flag: options.force ? 'w' : 'wx',
+    });
+  } catch (error: unknown) {
+    if (isErrnoException(error) && error.code === 'EEXIST') {
+      throw new Error(`refusing to overwrite existing file: ${outputPath}`);
+    }
+
+    throw error;
+  }
+
+  io.writeStdout(
     `Generated ${rows.length} public TRON addresses to ${outputPath}\n`,
   );
 }
@@ -121,13 +162,8 @@ function parseRequiredSafeInteger(
   return parsed;
 }
 
-async function pathExists(outputPath: string): Promise<boolean> {
-  try {
-    await access(outputPath, constants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
 }
 
 const entryPointPath = process.argv[1]
@@ -135,9 +171,7 @@ const entryPointPath = process.argv[1]
   : undefined;
 
 if (import.meta.url === entryPointPath) {
-  generateAddressPoolCli().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
+  runGenerateAddressPoolCli().then((exitCode) => {
+    process.exitCode = exitCode;
   });
 }
