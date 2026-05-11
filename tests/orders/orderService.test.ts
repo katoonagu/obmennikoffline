@@ -141,6 +141,9 @@ describe('orderService', () => {
       ['amountUsdt', '1234567890123456789012345678901234567', 'amountUsdt must fit Decimal(36, 6)'],
       ['amountRub', '1234567890123456789012345678901234567', 'amountRub must fit Decimal(36, 2)'],
       ['rateSnapshot', '1234567890123456789012345678901234567', 'rateSnapshot must fit Decimal(36, 6)'],
+      ['amountUsdt', '1234567890123456789012345678901', 'amountUsdt must fit Decimal(36, 6)'],
+      ['amountRub', '12345678901234567890123456789012345', 'amountRub must fit Decimal(36, 2)'],
+      ['rateSnapshot', '1234567890123456789012345678901', 'rateSnapshot must fit Decimal(36, 6)'],
     ].flatMap(([fieldName, value, message]) =>
       (['SELL_USDT', 'BUY_USDT'] as const).map((direction) => [direction, fieldName, value, message] as const),
     ),

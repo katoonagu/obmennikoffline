@@ -116,7 +116,12 @@ function assertPositiveDecimalString(value: unknown, fieldName: string, scale: n
   }
 
   const [integerPart, fractionalPart = ''] = value.split('.');
-  if (fractionalPart.length > scale || integerPart.length + fractionalPart.length > 36) {
+  const integerDigits = integerPart.replace(/^0+(?=\d)/, '').length;
+  if (
+    fractionalPart.length > scale ||
+    integerDigits > 36 - scale ||
+    integerDigits + fractionalPart.length > 36
+  ) {
     throw new Error(`${fieldName} must fit Decimal(36, ${scale})`);
   }
 }
