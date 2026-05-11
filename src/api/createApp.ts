@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z, ZodError } from 'zod';
 import {
@@ -14,6 +15,7 @@ export type ApiDb<TOrder> = AddressPoolImportDb & OrderApplicationDb<TOrder>;
 
 export interface CreateApiAppOptions<TOrder> {
   db: ApiDb<TOrder>;
+  enableAdminRoutes?: boolean;
   now?: () => Date;
   publicIdFactory?: () => string;
 }
@@ -33,7 +35,6 @@ const addressPoolImportBodySchema = z.object({
 });
 
 const baseOrderBodySchema = z.object({
-  publicId: z.string().optional(),
   userId: z.string(),
   amountUsdt: z.string(),
   amountRub: z.string(),
@@ -59,20 +60,22 @@ export function createApiApp<TOrder>(
     status: 'ok',
   }));
 
-  app.post('/api/address-pool/import', async (request, reply) => {
-    const body = parseBody(addressPoolImportBodySchema, request.body);
-    const result = await importAddressPoolToDb({
-      db: options.db,
-      rows: body.rows,
-    });
+  if (options.enableAdminRoutes === true) {
+    app.post('/api/address-pool/import', async (request, reply) => {
+      const body = parseBody(addressPoolImportBodySchema, request.body);
+      const result = await importAddressPoolToDb({
+        db: options.db,
+        rows: body.rows,
+      });
 
-    return reply.code(201).send(result);
-  });
+      return reply.code(201).send(result);
+    });
+  }
 
   app.post('/api/orders/buy', async (request, reply) => {
     const body = parseBody(buyOrderBodySchema, request.body);
     const order = await createBuyUsdtOrderInDb(options.db, {
-      publicId: body.publicId ?? publicIdFactory(),
+      publicId: publicIdFactory(),
       userId: body.userId,
       amountUsdt: body.amountUsdt,
       amountRub: body.amountRub,
@@ -89,7 +92,7 @@ export function createApiApp<TOrder>(
   app.post('/api/orders/sell', async (request, reply) => {
     const body = parseBody(sellOrderBodySchema, request.body);
     const order = await createSellUsdtOrderInDb(options.db, {
-      publicId: body.publicId ?? publicIdFactory(),
+      publicId: publicIdFactory(),
       userId: body.userId,
       amountUsdt: body.amountUsdt,
       amountRub: body.amountRub,
@@ -102,7 +105,7 @@ export function createApiApp<TOrder>(
     return reply.code(201).send({ order });
   });
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
       return reply.code(400).send({
         error: 'invalid_request',
@@ -120,13 +123,14 @@ export function createApiApp<TOrder>(
       });
     }
 
-    if (error instanceof Error) {
+    if (isDomainValidationError(error)) {
       return reply.code(400).send({
         error: 'validation_error',
         message: error.message,
       });
     }
 
+    request.log.error({ error }, 'Unhandled API error');
     return reply.code(500).send({
       error: 'internal_error',
     });
@@ -148,9 +152,22 @@ function isAddressPoolUnavailable(error: unknown): error is Error {
   );
 }
 
+function isDomainValidationError(error: unknown): error is Error {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.endsWith('is required') ||
+    error.message.includes('must be a valid TRON base58 address') ||
+    error.message.includes('must be a positive decimal string') ||
+    error.message.includes('must fit Decimal') ||
+    error.message.includes('must be a positive integer') ||
+    error.message.includes('must be a valid Date') ||
+    error.message.includes('produces an invalid expiry date')
+  );
+}
+
 function createPublicId(): string {
-  const random = Math.floor(Math.random() * 1_000_000)
-    .toString()
-    .padStart(6, '0');
-  return `E${random}`;
+  return `E${randomBytes(6).toString('hex').toUpperCase()}`;
 }

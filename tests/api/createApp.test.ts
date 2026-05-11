@@ -83,6 +83,7 @@ describe('createApiApp', () => {
     const db = createDb();
     const app = createApiApp({
       db,
+      enableAdminRoutes: true,
       now: () => NOW,
       publicIdFactory: () => 'E100001',
     });
@@ -116,6 +117,27 @@ describe('createApiApp', () => {
       ],
       skipDuplicates: false,
     });
+    await app.close();
+  });
+
+  it('does not expose admin address pool imports by default', async () => {
+    const db = createDb();
+    const app = createApiApp({
+      db,
+      now: () => NOW,
+      publicIdFactory: () => 'E100001',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/address-pool/import',
+      payload: {
+        rows: [],
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(db.depositAddress.createMany).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -153,6 +175,36 @@ describe('createApiApp', () => {
       },
     });
     expect(db.$transaction).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('ignores client-supplied public ids and generates them server-side', async () => {
+    const db = createDb();
+    const app = createApiApp({
+      db,
+      now: () => NOW,
+      publicIdFactory: () => 'E97011',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/orders/buy',
+      payload: {
+        publicId: 'CLIENT_CHOSEN',
+        userId: 'user-1',
+        amountUsdt: '2602.400000',
+        amountRub: '200000.00',
+        rateSnapshot: '76.850000',
+        clientPayoutAddress: PAYOUT_ADDRESS,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      order: {
+        publicId: 'E97011',
+      },
+    });
     await app.close();
   });
 
@@ -229,6 +281,42 @@ describe('createApiApp', () => {
     await app.close();
   });
 
+  it('maps concurrent reservation exhaustion to conflict responses', async () => {
+    const db = createDb(
+      createTx({
+        candidates: [
+          { id: 'addr-1', derivationIndex: 1, status: 'available' },
+          { id: 'addr-2', derivationIndex: 2, status: 'available' },
+          { id: 'addr-3', derivationIndex: 3, status: 'available' },
+        ],
+        updateCounts: [0, 0, 0],
+      }),
+    );
+    const app = createApiApp({
+      db,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/orders/sell',
+      payload: {
+        userId: 'user-1',
+        amountUsdt: '5000.000000',
+        amountRub: '381250.00',
+        rateSnapshot: '76.250000',
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: 'address_pool_unavailable',
+      message: 'failed to reserve TRON deposit address after concurrent attempts',
+    });
+    await app.close();
+  });
+
   it('maps schema errors to invalid request responses', async () => {
     const app = createApiApp({
       db: createDb(),
@@ -283,6 +371,38 @@ describe('createApiApp', () => {
       error: 'validation_error',
       message: 'clientPayoutAddress must be a valid TRON base58 address',
     });
+    await app.close();
+  });
+
+  it('does not leak unexpected internal error messages', async () => {
+    const tx = createTx();
+    const db = createDb(tx);
+    vi.mocked(db.order.create).mockRejectedValueOnce(
+      new Error('database secret detail'),
+    );
+    const app = createApiApp({
+      db,
+      now: () => NOW,
+      publicIdFactory: () => 'E97010',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/orders/buy',
+      payload: {
+        userId: 'user-1',
+        amountUsdt: '2602.400000',
+        amountRub: '200000.00',
+        rateSnapshot: '76.850000',
+        clientPayoutAddress: PAYOUT_ADDRESS,
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({
+      error: 'internal_error',
+    });
+    expect(response.body).not.toContain('database secret detail');
     await app.close();
   });
 });
