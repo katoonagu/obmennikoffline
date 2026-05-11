@@ -13,4 +13,10 @@ describe('package scripts', () => {
       'node dist/src/tron/watchDepositsOnceCli.js',
     );
   });
+
+  it('configures the TRON watcher cursor from built JavaScript in production', () => {
+    expect(packageJson.scripts['tron:configure-watcher-cursor']).toBe(
+      'node dist/src/tron/configureWatcherCursorCli.js',
+    );
+  });
 });
