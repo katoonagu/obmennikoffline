@@ -10,12 +10,15 @@ import {
   createSellUsdtOrderInDb,
   type OrderApplicationDb,
 } from '../orders/orderApplicationService.js';
+import { validateTelegramInitData } from '../telegram/validateInitData.js';
 
 export type ApiDb<TOrder> = AddressPoolImportDb & OrderApplicationDb<TOrder>;
 
 export interface CreateApiAppOptions<TOrder> {
   db: ApiDb<TOrder>;
   enableAdminRoutes?: boolean;
+  telegramBotToken?: string;
+  telegramInitDataMaxAgeSeconds?: number;
   now?: () => Date;
   publicIdFactory?: () => string;
 }
@@ -49,6 +52,10 @@ const buyOrderBodySchema = baseOrderBodySchema.extend({
 
 const sellOrderBodySchema = baseOrderBodySchema;
 
+const telegramInitDataBodySchema = z.object({
+  initData: z.string().min(1),
+});
+
 const DOMAIN_VALIDATION_PATTERNS = [
   /^(publicId|userId) is required$/,
   /^depositAddressId is required for SELL_USDT order$/,
@@ -64,6 +71,17 @@ const DOMAIN_VALIDATION_PATTERNS = [
   /^duplicate derivation_index in import: .+$/,
   /^duplicate address in import: .+$/,
 ];
+
+const TELEGRAM_AUTH_ERROR_MESSAGES = new Set([
+  'initData hash is required',
+  'initData signature is invalid',
+  'auth_date is required',
+  'auth_date must be a Unix timestamp',
+  'auth_date is from the future',
+  'initData is expired',
+  'user must be valid JSON',
+  'user.id is required',
+]);
 
 export function createApiApp<TOrder>(
   options: CreateApiAppOptions<TOrder>,
@@ -85,6 +103,24 @@ export function createApiApp<TOrder>(
       });
 
       return reply.code(201).send(result);
+    });
+  }
+
+  if (options.telegramBotToken) {
+    app.post('/api/telegram/validate-init-data', async (request, reply) => {
+      const body = parseBody(telegramInitDataBodySchema, request.body);
+      const validated = validateTelegramInitData({
+        initData: body.initData,
+        botToken: options.telegramBotToken!,
+        now: now(),
+        maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      });
+
+      return reply.send({
+        authDate: validated.authDate.toISOString(),
+        queryId: validated.queryId,
+        user: validated.user,
+      });
     });
   }
 
@@ -139,6 +175,13 @@ export function createApiApp<TOrder>(
       });
     }
 
+    if (isTelegramAuthError(error)) {
+      return reply.code(401).send({
+        error: 'telegram_auth_invalid',
+        message: error.message,
+      });
+    }
+
     if (isDomainValidationError(error)) {
       return reply.code(400).send({
         error: 'validation_error',
@@ -174,6 +217,10 @@ function isDomainValidationError(error: unknown): error is Error {
   }
 
   return DOMAIN_VALIDATION_PATTERNS.some((pattern) => pattern.test(error.message));
+}
+
+function isTelegramAuthError(error: unknown): error is Error {
+  return error instanceof Error && TELEGRAM_AUTH_ERROR_MESSAGES.has(error.message);
 }
 
 function createPublicId(): string {

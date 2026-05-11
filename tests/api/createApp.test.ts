@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApiApp, type ApiDb } from '../../src/api/createApp.js';
 import type {
@@ -12,6 +13,7 @@ interface PersistedOrder extends OrderCreateData {
 
 const NOW = new Date('2026-05-11T09:00:00.000Z');
 const PAYOUT_ADDRESS = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
+const BOT_TOKEN = '123456:test_bot_token';
 
 function createPersistedOrder(data: OrderCreateData): PersistedOrder {
   return {
@@ -55,6 +57,20 @@ function createDb(
     },
     $transaction: vi.fn(async (fn) => fn(tx)),
   };
+}
+
+function createTelegramInitData(fields: Record<string, string>): string {
+  const dataCheckString = Object.entries(fields)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  const secretKey = createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
+  const hash = createHmac('sha256', secretKey)
+    .update(dataCheckString)
+    .digest('hex');
+  const params = new URLSearchParams(fields);
+  params.set('hash', hash);
+  return params.toString();
 }
 
 describe('createApiApp', () => {
@@ -370,6 +386,92 @@ describe('createApiApp', () => {
     expect(response.json()).toEqual({
       error: 'validation_error',
       message: 'clientPayoutAddress must be a valid TRON base58 address',
+    });
+    await app.close();
+  });
+
+  it('does not expose Telegram initData validation without a bot token', async () => {
+    const app = createApiApp({
+      db: createDb(),
+      now: () => NOW,
+      publicIdFactory: () => 'E97010',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/telegram/validate-init-data',
+      payload: {
+        initData: createTelegramInitData({
+          auth_date: '1778490000',
+          user: JSON.stringify({ id: 462656683 }),
+        }),
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('validates Telegram Mini App initData when a bot token is configured', async () => {
+    const app = createApiApp({
+      db: createDb(),
+      telegramBotToken: BOT_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E97010',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/telegram/validate-init-data',
+      payload: {
+        initData: createTelegramInitData({
+          auth_date: '1778490000',
+          query_id: 'AAHdF6IQAAAAAN0XohDhrOrc',
+          user: JSON.stringify({
+            id: 462656683,
+            first_name: 'Pavel',
+            username: 'pavel',
+          }),
+        }),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      authDate: '2026-05-11T09:00:00.000Z',
+      queryId: 'AAHdF6IQAAAAAN0XohDhrOrc',
+      user: {
+        id: 462656683,
+        first_name: 'Pavel',
+        username: 'pavel',
+      },
+    });
+    await app.close();
+  });
+
+  it('maps invalid Telegram initData to unauthorized responses', async () => {
+    const app = createApiApp({
+      db: createDb(),
+      telegramBotToken: BOT_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E97010',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/telegram/validate-init-data',
+      payload: {
+        initData: createTelegramInitData({
+          auth_date: '1778490000',
+          user: JSON.stringify({ id: 462656683 }),
+        }).replace('462656683', '462656684'),
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: 'telegram_auth_invalid',
+      message: 'initData signature is invalid',
     });
     await app.close();
   });
