@@ -26,9 +26,15 @@ export function reserveDepositAddress(input: ReserveDepositAddressInput): Reserv
     throw new Error('ttlMinutes must be a positive integer');
   }
 
-  const address = input.addresses
-    .filter((candidate) => candidate.status === 'available')
-    .sort((a, b) => a.derivationIndex - b.derivationIndex)[0];
+  const availableAddresses = input.addresses.filter((candidate) => candidate.status === 'available');
+
+  for (const address of availableAddresses) {
+    if (!Number.isSafeInteger(address.derivationIndex) || address.derivationIndex < 0) {
+      throw new Error('derivationIndex must be a safe non-negative integer');
+    }
+  }
+
+  const address = availableAddresses.sort((a, b) => a.derivationIndex - b.derivationIndex)[0];
 
   if (!address) {
     throw new Error('no available TRON deposit addresses');
