@@ -79,6 +79,9 @@ model Order {
   orderExpiresAt      DateTime
   depositAddressId    String?                 @unique
   clientPayoutAddress String?
+  payoutTxId          String?                 @unique
+  payoutTxRecordedAt  DateTime?
+  payoutTxRecordedBy  String?
   status              OrderStatus
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt

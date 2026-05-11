@@ -11,6 +11,11 @@ import {
   type OrderApplicationDb,
 } from '../orders/orderApplicationService.js';
 import {
+  recordManualCryptoPayoutInDb,
+  setManagerOrderStatusInDb,
+  type OrderManagerDb,
+} from '../orders/orderManagerService.js';
+import {
   getOrderByPublicId,
   getUserProfile,
   listAllActiveOrders,
@@ -28,6 +33,7 @@ import {
 
 export type ApiDb<TOrder> = AddressPoolImportDb &
   OrderApplicationDb<TOrder> &
+  OrderManagerDb<TOrder> &
   OrderReadDb &
   TelegramUserDb;
 
@@ -86,11 +92,39 @@ const orderParamsSchema = z.object({
   publicId: z.string().min(1),
 });
 
+const managerStatusBodySchema = z.object({
+  actorId: z.string().min(1),
+  status: z.enum([
+    'pending_aml',
+    'manager_review',
+    'ready_for_cash_payout',
+    'ready_for_crypto_payout',
+    'completed',
+    'cancelled',
+    'expired',
+    'rejected',
+  ]),
+  comment: z.string().optional(),
+});
+
+const manualCryptoPayoutBodySchema = z.object({
+  actorId: z.string().min(1),
+  txId: z.string().min(1),
+  comment: z.string().optional(),
+});
+
 const DOMAIN_VALIDATION_PATTERNS = [
-  /^(publicId|userId) is required$/,
+  /^(actorId|publicId|txId|userId) is required$/,
   /^limit must be a positive integer up to 100$/,
   /^depositAddressId is required for SELL_USDT order$/,
+  /^clientPayoutAddress is required for manual crypto payout$/,
   /^(clientPayoutAddress|address) must be a valid TRON base58 address$/,
+  /^txId must be a 64-character hex TRON transaction id$/,
+  /^target status is not manager-settable$/,
+  /^manual crypto payout can only be recorded for BUY_USDT orders$/,
+  /^order is not open for manual crypto payout$/,
+  /^order is no longer open for manual crypto payout$/,
+  /^BUY_USDT completion requires manual crypto payout tx id$/,
   /^(amountUsdt|amountRub|rateSnapshot) must be a positive decimal string$/,
   /^(amountUsdt|amountRub|rateSnapshot) must fit Decimal\(36, (2|6)\)$/,
   /^(rateTtlMinutes|orderTtlMinutes|maxReservationAttempts|ttlMinutes) must be a positive integer$/,
@@ -164,6 +198,42 @@ export function createApiApp<TOrder>(
       });
 
       return reply.send({ orders });
+    });
+
+    app.post('/api/admin/orders/:publicId/status', async (request, reply) => {
+      assertAdminAuthorization({
+        authorization: request.headers.authorization,
+        token: options.adminApiToken!,
+      });
+      const params = parseBody(orderParamsSchema, request.params);
+      const body = parseBody(managerStatusBodySchema, request.body);
+      const order = await setManagerOrderStatusInDb(options.db, {
+        publicId: params.publicId,
+        actorId: body.actorId,
+        status: body.status,
+        comment: body.comment,
+        now: now(),
+      });
+
+      return reply.send({ order });
+    });
+
+    app.post('/api/admin/orders/:publicId/manual-crypto-payout', async (request, reply) => {
+      assertAdminAuthorization({
+        authorization: request.headers.authorization,
+        token: options.adminApiToken!,
+      });
+      const params = parseBody(orderParamsSchema, request.params);
+      const body = parseBody(manualCryptoPayoutBodySchema, request.body);
+      const order = await recordManualCryptoPayoutInDb(options.db, {
+        publicId: params.publicId,
+        actorId: body.actorId,
+        txId: body.txId,
+        comment: body.comment,
+        now: now(),
+      });
+
+      return reply.send({ order });
     });
   }
 
@@ -343,6 +413,13 @@ export function createApiApp<TOrder>(
       });
     }
 
+    if (isNotFoundError(error)) {
+      return reply.code(404).send({
+        error: 'not_found',
+        message: error.message,
+      });
+    }
+
     if (isDomainValidationError(error)) {
       return reply.code(400).send({
         error: 'validation_error',
@@ -456,6 +533,10 @@ function isTelegramAuthError(error: unknown): error is Error {
 
 function isAdminAuthError(error: unknown): error is Error {
   return error instanceof Error && ADMIN_AUTH_ERROR_MESSAGES.has(error.message);
+}
+
+function isNotFoundError(error: unknown): error is Error {
+  return error instanceof Error && error.message === 'order not found';
 }
 
 function createPublicId(): string {

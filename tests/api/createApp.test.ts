@@ -6,16 +6,25 @@ import type {
   OrderApplicationTransaction,
   OrderCreateData,
 } from '../../src/orders/orderApplicationService.js';
+import type {
+  ManagerOrderRecord,
+  OrderManagerTransaction,
+} from '../../src/orders/orderManagerService.js';
 import type { ReadableOrderRecord } from '../../src/orders/orderReadService.js';
 
 interface PersistedOrder extends OrderCreateData {
   id: string;
+  completedAt?: Date | null;
+  payoutTxId?: string | null;
+  payoutTxRecordedAt?: Date | null;
+  payoutTxRecordedBy?: string | null;
 }
 
 const NOW = new Date('2026-05-11T09:00:00.000Z');
 const PAYOUT_ADDRESS = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
 const BOT_TOKEN = '123456:test_bot_token';
 const ADMIN_TOKEN = 'test-admin-token';
+const TX_ID = 'A'.repeat(64);
 
 function createPersistedOrder(data: OrderCreateData): PersistedOrder {
   return {
@@ -49,14 +58,35 @@ function createReadableOrder(
   };
 }
 
+function createManagerOrder(
+  overrides: Partial<ManagerOrderRecord> = {},
+): ManagerOrderRecord {
+  return {
+    id: 'order-db-1',
+    publicId: 'E97010',
+    direction: 'BUY_USDT',
+    status: 'ready_for_crypto_payout',
+    clientPayoutAddress: PAYOUT_ADDRESS,
+    ...overrides,
+  };
+}
+
+type TestTransaction = OrderApplicationTransaction<PersistedOrder> &
+  OrderManagerTransaction<PersistedOrder>;
+
 function createTx(input?: {
   candidates?: Array<DepositAddressCandidate | null>;
   updateCounts?: number[];
-}): OrderApplicationTransaction<PersistedOrder> {
+  managerOrder?: ManagerOrderRecord | null;
+}): TestTransaction {
   const candidates = input?.candidates ?? [
     { id: 'addr-1', derivationIndex: 1, status: 'available' },
   ];
   const updateCounts = input?.updateCounts ?? [1];
+  const managerOrder: ManagerOrderRecord | null =
+    input && 'managerOrder' in input && input.managerOrder !== undefined
+      ? input.managerOrder
+      : createManagerOrder();
 
   return {
     depositAddress: {
@@ -65,21 +95,32 @@ function createTx(input?: {
     },
     order: {
       create: vi.fn(async ({ data }) => createPersistedOrder(data)),
+      findUnique: vi.fn(async () => managerOrder),
+      update: vi.fn(async ({ data }) => ({
+        ...(managerOrder ?? createManagerOrder()),
+        ...data,
+      }) as PersistedOrder),
+    },
+    auditLog: {
+      create: vi.fn(async ({ data }) => ({
+        id: 'audit-1',
+        ...data,
+      })),
     },
   };
 }
 
 interface CreateDbOptions {
-  tx?: OrderApplicationTransaction<PersistedOrder>;
+  tx?: TestTransaction;
   readOrders?: ReadableOrderRecord[];
   readOrder?: ReadableOrderRecord | null;
   countByCall?: number[];
 }
 
 function createDb(
-  input: OrderApplicationTransaction<PersistedOrder> | CreateDbOptions = {},
+  input: TestTransaction | CreateDbOptions = {},
 ): ApiDb<PersistedOrder> & {
-  _tx: OrderApplicationTransaction<PersistedOrder>;
+  _tx: TestTransaction;
 } {
   const options = isOrderApplicationTransaction(input)
     ? { tx: input }
@@ -115,8 +156,8 @@ function createDb(
 }
 
 function isOrderApplicationTransaction(
-  input: OrderApplicationTransaction<PersistedOrder> | CreateDbOptions,
-): input is OrderApplicationTransaction<PersistedOrder> {
+  input: TestTransaction | CreateDbOptions,
+): input is TestTransaction {
   return 'depositAddress' in input && 'order' in input;
 }
 
@@ -326,6 +367,189 @@ describe('createApiApp', () => {
         take: 10,
       }),
     );
+    await app.close();
+  });
+
+  it('records manual crypto payout tx hashes through an admin route', async () => {
+    const tx = createTx({
+      managerOrder: createManagerOrder({
+        publicId: 'E97010',
+        direction: 'BUY_USDT',
+        status: 'ready_for_crypto_payout',
+        clientPayoutAddress: PAYOUT_ADDRESS,
+      }),
+    });
+    const db = createDb(tx);
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E97010',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/orders/E97010/manual-crypto-payout',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+      },
+      payload: {
+        actorId: 'manager-1',
+        txId: TX_ID,
+        comment: 'sent from external wallet',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      order: {
+        publicId: 'E97010',
+        status: 'completed',
+        payoutTxId: TX_ID.toLowerCase(),
+      },
+    });
+    expect(tx.order.update).toHaveBeenCalledWith({
+      where: {
+        publicId: 'E97010',
+        payoutTxId: null,
+        status: {
+          in: ['awaiting_office_visit', 'manager_review', 'ready_for_crypto_payout'],
+        },
+      },
+      data: {
+        status: 'completed',
+        completedAt: NOW,
+        payoutTxId: TX_ID.toLowerCase(),
+        payoutTxRecordedAt: NOW,
+        payoutTxRecordedBy: 'manager-1',
+      },
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'manual_crypto_payout_recorded',
+          actorId: 'manager-1',
+        }),
+      }),
+    );
+    await app.close();
+  });
+
+  it('sets manager-controlled order statuses through an admin route', async () => {
+    const tx = createTx({
+      managerOrder: createManagerOrder({
+        publicId: 'E74737',
+        direction: 'SELL_USDT',
+        status: 'ready_for_cash_payout',
+        clientPayoutAddress: null,
+      }),
+    });
+    const db = createDb(tx);
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/orders/E74737/status',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+      },
+      payload: {
+        actorId: 'manager-1',
+        status: 'completed',
+        comment: 'cash paid in office',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      order: {
+        publicId: 'E74737',
+        status: 'completed',
+        completedAt: '2026-05-11T09:00:00.000Z',
+      },
+    });
+    expect(tx.order.update).toHaveBeenCalledWith({
+      where: {
+        publicId: 'E74737',
+      },
+      data: {
+        status: 'completed',
+        completedAt: NOW,
+      },
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'manager_order_status_changed',
+          actorId: 'manager-1',
+        }),
+      }),
+    );
+    await app.close();
+  });
+
+  it('returns not found when manager updates an unknown order', async () => {
+    const app = createApiApp({
+      db: createDb(createTx({ managerOrder: null })),
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E40400',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/orders/E40400/status',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+      },
+      payload: {
+        actorId: 'manager-1',
+        status: 'cancelled',
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      error: 'not_found',
+      message: 'order not found',
+    });
+    await app.close();
+  });
+
+  it('rejects completing BUY_USDT through generic manager status updates', async () => {
+    const app = createApiApp({
+      db: createDb(createTx({ managerOrder: createManagerOrder() })),
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E97010',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/orders/E97010/status',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+      },
+      payload: {
+        actorId: 'manager-1',
+        status: 'completed',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'validation_error',
+      message: 'BUY_USDT completion requires manual crypto payout tx id',
+    });
     await app.close();
   });
 
