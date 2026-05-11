@@ -91,6 +91,18 @@ describe('orderService', () => {
     expect(() => createOrderForTest(direction, { [fieldName]: '   ' })).toThrow(message);
   });
 
+  it.each(
+    (['publicId', 'userId'] as const).flatMap((fieldName) =>
+      [null, 123].flatMap((value) =>
+        (['SELL_USDT', 'BUY_USDT'] as const).map((direction) => [direction, fieldName, value] as const),
+      ),
+    ),
+  )('rejects %s when %s is a non-string runtime value', (direction, fieldName, value) => {
+    expect(() => createOrderForTest(direction, { [fieldName]: value })).toThrow(
+      `${fieldName} is required`,
+    );
+  });
+
   it.each(['SELL_USDT', 'BUY_USDT'] as const)('rejects %s when now is invalid', (direction) => {
     expect(() => createOrderForTest(direction, { now: new Date('invalid') })).toThrow(
       'now must be a valid Date',
@@ -108,6 +120,27 @@ describe('orderService', () => {
       `${fieldName} must be a positive decimal string`,
     );
   });
+
+  it.each(
+    (['amountUsdt', 'amountRub', 'rateSnapshot'] as const).flatMap((fieldName) =>
+      [123, null, {}].flatMap((value) =>
+        (['SELL_USDT', 'BUY_USDT'] as const).map((direction) => [direction, fieldName, value] as const),
+      ),
+    ),
+  )('rejects %s when %s is a non-string runtime value', (direction, fieldName, value) => {
+    expect(() => createOrderForTest(direction, { [fieldName]: value })).toThrow(
+      `${fieldName} must be a positive decimal string`,
+    );
+  });
+
+  it.each([null, 123] as const)(
+    'rejects SELL_USDT when depositAddressId is a non-string runtime value: %s',
+    (value) => {
+      expect(() => createOrderForTest('SELL_USDT', { depositAddressId: value })).toThrow(
+        'depositAddressId is required for SELL_USDT order',
+      );
+    },
+  );
 
   it.each([
     ['SELL_USDT', 'rateTtlMinutes', 0],
@@ -142,6 +175,15 @@ describe('orderService', () => {
       }
     }).toThrow(`${fieldName} must be a positive integer`);
   });
+
+  it.each(['rateTtlMinutes', 'orderTtlMinutes'] as const)(
+    'rejects when %s produces an invalid expiry date',
+    (fieldName) => {
+      expect(() => createOrderForTest('BUY_USDT', { [fieldName]: Number.MAX_SAFE_INTEGER })).toThrow(
+        `${fieldName} produces an invalid expiry date`,
+      );
+    },
+  );
 });
 
 type TestOrderDirection = 'SELL_USDT' | 'BUY_USDT';

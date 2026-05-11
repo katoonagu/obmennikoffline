@@ -38,12 +38,14 @@ export interface CreateBuyUsdtOrderInput extends BaseOrderInput {
 
 export function createSellUsdtOrder(input: CreateSellUsdtOrderInput): CreatedOrder {
   assertBaseOrderInput(input);
-  assertPositiveTtl(input.rateTtlMinutes, 'rateTtlMinutes');
-  assertPositiveTtl(input.orderTtlMinutes, 'orderTtlMinutes');
+  assertPositiveTtl(input.rateTtlMinutes, 'rateTtlMinutes', input.now);
+  assertPositiveTtl(input.orderTtlMinutes, 'orderTtlMinutes', input.now);
 
-  if (!input.depositAddressId.trim()) {
-    throw new Error('depositAddressId is required for SELL_USDT order');
-  }
+  assertRequiredString(
+    input.depositAddressId,
+    'depositAddressId',
+    'depositAddressId is required for SELL_USDT order',
+  );
 
   return {
     publicId: input.publicId,
@@ -64,8 +66,8 @@ export function createSellUsdtOrder(input: CreateSellUsdtOrderInput): CreatedOrd
 
 export function createBuyUsdtOrder(input: CreateBuyUsdtOrderInput): CreatedOrder {
   assertBaseOrderInput(input);
-  assertPositiveTtl(input.rateTtlMinutes, 'rateTtlMinutes');
-  assertPositiveTtl(input.orderTtlMinutes, 'orderTtlMinutes');
+  assertPositiveTtl(input.rateTtlMinutes, 'rateTtlMinutes', input.now);
+  assertPositiveTtl(input.orderTtlMinutes, 'orderTtlMinutes', input.now);
   assertTronAddress(input.clientPayoutAddress, 'clientPayoutAddress');
 
   return {
@@ -98,13 +100,17 @@ function assertBaseOrderInput(input: BaseOrderInput): void {
   assertValidDate(input.now, 'now');
 }
 
-function assertRequiredString(value: string, fieldName: string): void {
-  if (!value.trim()) {
-    throw new Error(`${fieldName} is required`);
+function assertRequiredString(value: unknown, fieldName: string, message = `${fieldName} is required`): void {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(message);
   }
 }
 
-function assertPositiveDecimalString(value: string, fieldName: string): void {
+function assertPositiveDecimalString(value: unknown, fieldName: string): void {
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a positive decimal string`);
+  }
+
   if (!/^\d+(?:\.\d+)?$/.test(value) || !Number.isFinite(Number(value)) || Number(value) <= 0) {
     throw new Error(`${fieldName} must be a positive decimal string`);
   }
@@ -116,8 +122,14 @@ function assertValidDate(value: Date, fieldName: string): void {
   }
 }
 
-function assertPositiveTtl(value: number, fieldName: string): void {
+function assertPositiveTtl(value: number, fieldName: string, now: Date): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${fieldName} must be a positive integer`);
+  }
+
+  const expiresAt = addMinutes(now, value);
+
+  if (Number.isNaN(expiresAt.getTime())) {
+    throw new Error(`${fieldName} produces an invalid expiry date`);
   }
 }
