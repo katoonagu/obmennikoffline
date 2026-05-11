@@ -370,6 +370,36 @@ describe('createApiApp', () => {
     await app.close();
   });
 
+  it('rejects tampered Telegram initData on order endpoints', async () => {
+    const app = createApiApp({
+      db: createDb(),
+      telegramBotToken: BOT_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E97012',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/orders/buy',
+      headers: {
+        authorization: createTelegramAuthorizationHeader().replace('462656683', '462656684'),
+      },
+      payload: {
+        amountUsdt: '2602.400000',
+        amountRub: '200000.00',
+        rateSnapshot: '76.850000',
+        clientPayoutAddress: PAYOUT_ADDRESS,
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: 'telegram_auth_invalid',
+      message: 'initData signature is invalid',
+    });
+    await app.close();
+  });
+
   it('creates SELL orders for Telegram-authenticated users and ignores body userId', async () => {
     const tx = createTx();
     const db = createDb(tx);
