@@ -15,6 +15,7 @@ interface PersistedOrder extends OrderCreateData {
 const NOW = new Date('2026-05-11T09:00:00.000Z');
 const PAYOUT_ADDRESS = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
 const BOT_TOKEN = '123456:test_bot_token';
+const ADMIN_TOKEN = 'test-admin-token';
 
 function createPersistedOrder(data: OrderCreateData): PersistedOrder {
   return {
@@ -171,6 +172,7 @@ describe('createApiApp', () => {
     const app = createApiApp({
       db,
       enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
       now: () => NOW,
       publicIdFactory: () => 'E100001',
     });
@@ -178,6 +180,9 @@ describe('createApiApp', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/address-pool/import',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+      },
       payload: {
         rows: [
           {
@@ -207,6 +212,61 @@ describe('createApiApp', () => {
     await app.close();
   });
 
+  it('rejects admin address pool imports without a valid admin token', async () => {
+    const db = createDb();
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E100001',
+    });
+
+    const missingTokenResponse = await app.inject({
+      method: 'POST',
+      url: '/api/address-pool/import',
+      payload: {
+        rows: [],
+      },
+    });
+
+    expect(missingTokenResponse.statusCode).toBe(401);
+    expect(missingTokenResponse.json()).toEqual({
+      error: 'admin_auth_invalid',
+      message: 'admin authorization is required',
+    });
+
+    const invalidTokenResponse = await app.inject({
+      method: 'POST',
+      url: '/api/address-pool/import',
+      headers: {
+        authorization: 'Bearer wrong-token',
+      },
+      payload: {
+        rows: [],
+      },
+    });
+
+    expect(invalidTokenResponse.statusCode).toBe(401);
+    expect(invalidTokenResponse.json()).toEqual({
+      error: 'admin_auth_invalid',
+      message: 'admin authorization token is invalid',
+    });
+    expect(db.depositAddress.createMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuses to register admin routes without an admin token', () => {
+    expect(() =>
+      createApiApp({
+        db: createDb(),
+        enableAdminRoutes: true,
+        now: () => NOW,
+        publicIdFactory: () => 'E100001',
+      }),
+    ).toThrow('adminApiToken is required when admin routes are enabled');
+  });
+
   it('does not expose admin address pool imports by default', async () => {
     const db = createDb();
     const app = createApiApp({
@@ -225,6 +285,47 @@ describe('createApiApp', () => {
 
     expect(response.statusCode).toBe(404);
     expect(db.depositAddress.createMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('lists active orders for managers through an admin route', async () => {
+    const db = createDb({
+      readOrders: [createReadableOrder()],
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/orders/active?limit=10',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      orders: [
+        {
+          publicId: 'E74737',
+          direction: 'SELL_USDT',
+          status: 'awaiting_deposit',
+        },
+      ],
+    });
+    expect(db.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({
+          userId: expect.any(String),
+        }),
+        take: 10,
+      }),
+    );
     await app.close();
   });
 

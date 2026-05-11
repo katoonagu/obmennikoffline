@@ -4,6 +4,7 @@ import {
   HISTORY_ORDER_STATUSES,
   getOrderByPublicId,
   getUserProfile,
+  listAllActiveOrders,
   listActiveOrders,
   listHistoryOrders,
   type OrderReadDb,
@@ -102,6 +103,30 @@ describe('orderReadService', () => {
           createdAt: 'desc',
         },
         take: 20,
+      }),
+    );
+  });
+
+  it('lists all active orders for manager queues without a user filter', async () => {
+    const db = createDb({
+      orders: [createOrderRecord()],
+    });
+
+    await expect(listAllActiveOrders(db, { limit: 10 })).resolves.toMatchObject([
+      {
+        publicId: 'E74737',
+        status: 'awaiting_deposit',
+      },
+    ]);
+
+    expect(db.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: {
+            in: ACTIVE_ORDER_STATUSES,
+          },
+        },
+        take: 10,
       }),
     );
   });

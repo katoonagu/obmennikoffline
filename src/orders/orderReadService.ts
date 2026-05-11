@@ -89,7 +89,7 @@ export interface OrderReadDb {
 }
 
 interface OrderReadWhere {
-  userId: string;
+  userId?: string;
   publicId?: string;
   status?: {
     in: readonly OrderStatus[];
@@ -162,6 +162,28 @@ export async function listActiveOrders(
   const orders = await db.order.findMany({
     where: {
       userId,
+      status: {
+        in: ACTIVE_ORDER_STATUSES,
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: normalizeLimit(input.limit),
+    select: ORDER_READ_SELECT,
+  });
+
+  return orders.map(toOrderDto);
+}
+
+export async function listAllActiveOrders(
+  db: OrderReadDb,
+  input: {
+    limit?: number;
+  },
+): Promise<OrderDto[]> {
+  const orders = await db.order.findMany({
+    where: {
       status: {
         in: ACTIVE_ORDER_STATUSES,
       },

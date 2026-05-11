@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z, ZodError } from 'zod';
 import {
@@ -13,6 +13,7 @@ import {
 import {
   getOrderByPublicId,
   getUserProfile,
+  listAllActiveOrders,
   listActiveOrders,
   listHistoryOrders,
   type OrderReadDb,
@@ -33,6 +34,7 @@ export type ApiDb<TOrder> = AddressPoolImportDb &
 export interface CreateApiAppOptions<TOrder> {
   db: ApiDb<TOrder>;
   enableAdminRoutes?: boolean;
+  adminApiToken?: string;
   telegramBotToken?: string;
   telegramInitDataMaxAgeSeconds?: number;
   now?: () => Date;
@@ -115,9 +117,19 @@ const TELEGRAM_AUTH_ERROR_MESSAGES = new Set([
   'telegram user is required',
 ]);
 
+const ADMIN_AUTH_ERROR_MESSAGES = new Set([
+  'admin authorization is required',
+  'admin authorization must use Bearer scheme',
+  'admin authorization token is invalid',
+]);
+
 export function createApiApp<TOrder>(
   options: CreateApiAppOptions<TOrder>,
 ): FastifyInstance {
+  if (options.enableAdminRoutes === true && !options.adminApiToken) {
+    throw new Error('adminApiToken is required when admin routes are enabled');
+  }
+
   const app = Fastify({ logger: false });
   const now = options.now ?? (() => new Date());
   const publicIdFactory = options.publicIdFactory ?? createPublicId;
@@ -128,6 +140,10 @@ export function createApiApp<TOrder>(
 
   if (options.enableAdminRoutes === true) {
     app.post('/api/address-pool/import', async (request, reply) => {
+      assertAdminAuthorization({
+        authorization: request.headers.authorization,
+        token: options.adminApiToken!,
+      });
       const body = parseBody(addressPoolImportBodySchema, request.body);
       const result = await importAddressPoolToDb({
         db: options.db,
@@ -135,6 +151,19 @@ export function createApiApp<TOrder>(
       });
 
       return reply.code(201).send(result);
+    });
+
+    app.get('/api/admin/orders/active', async (request, reply) => {
+      assertAdminAuthorization({
+        authorization: request.headers.authorization,
+        token: options.adminApiToken!,
+      });
+      const query = parseBody(orderListQuerySchema, request.query);
+      const orders = await listAllActiveOrders(options.db, {
+        limit: query.limit,
+      });
+
+      return reply.send({ orders });
     });
   }
 
@@ -307,6 +336,13 @@ export function createApiApp<TOrder>(
       });
     }
 
+    if (isAdminAuthError(error)) {
+      return reply.code(401).send({
+        error: 'admin_auth_invalid',
+        message: error.message,
+      });
+    }
+
     if (isDomainValidationError(error)) {
       return reply.code(400).send({
         error: 'validation_error',
@@ -325,6 +361,34 @@ export function createApiApp<TOrder>(
 
 function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
   return schema.parse(body);
+}
+
+function assertAdminAuthorization(input: {
+  authorization: string | undefined;
+  token: string;
+}): void {
+  if (!input.authorization) {
+    throw new Error('admin authorization is required');
+  }
+
+  const [scheme, ...rest] = input.authorization.split(' ');
+  if (scheme !== 'Bearer' || rest.length === 0) {
+    throw new Error('admin authorization must use Bearer scheme');
+  }
+
+  if (!safeStringEqual(rest.join(' '), input.token)) {
+    throw new Error('admin authorization token is invalid');
+  }
+}
+
+function safeStringEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    timingSafeEqual(leftBuffer, rightBuffer)
+  );
 }
 
 async function resolveRequestUserId(input: {
@@ -388,6 +452,10 @@ function isDomainValidationError(error: unknown): error is Error {
 
 function isTelegramAuthError(error: unknown): error is Error {
   return error instanceof Error && TELEGRAM_AUTH_ERROR_MESSAGES.has(error.message);
+}
+
+function isAdminAuthError(error: unknown): error is Error {
+  return error instanceof Error && ADMIN_AUTH_ERROR_MESSAGES.has(error.message);
 }
 
 function createPublicId(): string {

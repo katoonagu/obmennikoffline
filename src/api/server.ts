@@ -1,8 +1,12 @@
 import { createApiApp, type ApiDb } from './createApp.js';
 import { prisma } from '../db/prisma.js';
 
+const adminApiToken = readOptionalEnv('ADMIN_API_TOKEN');
+
 const app = createApiApp({
   db: prisma as unknown as ApiDb<unknown>,
+  enableAdminRoutes: Boolean(adminApiToken),
+  adminApiToken,
   telegramBotToken: readOptionalEnv('TELEGRAM_BOT_TOKEN'),
   telegramInitDataMaxAgeSeconds: readOptionalPositiveIntegerEnv(
     'TELEGRAM_INIT_DATA_MAX_AGE_SECONDS',
