@@ -188,6 +188,52 @@ describe('ingestUsdtDepositInDb', () => {
     );
   });
 
+  it('records late deposits for SELL orders already expired by the expiration sweeper', async () => {
+    const tx = createTx(
+      createWatchedAddress({
+        status: 'expired',
+        order: {
+          id: 'order-db-1',
+          publicId: 'E74737',
+          status: 'expired',
+          amountUsdt: { toString: () => '5000.000000' },
+          orderExpiresAt: new Date('2026-05-11T09:00:00.000Z'),
+        },
+      }),
+    );
+    const db = createDb(tx);
+
+    await expect(
+      ingestUsdtDepositInDb(db, { transfer: createTransfer() }),
+    ).resolves.toEqual({
+      status: 'processed',
+      orderPublicId: 'E74737',
+      nextOrderStatus: 'late_payment',
+      depositAddressStatus: 'late_funded',
+    });
+
+    expect(tx.blockchainTransaction.create).toHaveBeenCalled();
+    expect(tx.order.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'order-db-1',
+        status: 'expired',
+      },
+      data: {
+        status: 'late_payment',
+      },
+    });
+    expect(tx.depositAddress.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'addr-1',
+        status: 'expired',
+      },
+      data: {
+        status: 'late_funded',
+        fundedAt: BLOCK_TIMESTAMP,
+      },
+    });
+  });
+
   it('sends amount mismatches to manager review', async () => {
     const tx = createTx(createWatchedAddress());
     const db = createDb(tx);

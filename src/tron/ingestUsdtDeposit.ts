@@ -86,7 +86,7 @@ export interface DepositIngestionTransaction {
     updateMany(input: {
       where: {
         id: string;
-        status: 'awaiting_deposit';
+        status: OrderStatus;
       };
       data: {
         status: OrderStatus;
@@ -156,14 +156,14 @@ export async function ingestUsdtDepositInDb(
     }
 
     const order = depositAddress.order;
-    if (depositAddress.status !== 'reserved') {
+    if (!isDepositAddressOpenForIngestion(depositAddress.status)) {
       return {
         status: 'ignored_ineligible_address',
         toAddress: input.transfer.toAddress,
         currentStatus: depositAddress.status,
       };
     }
-    if (order.status !== 'awaiting_deposit') {
+    if (!isOrderOpenForDepositIngestion(order.status)) {
       return {
         status: 'ignored_ineligible_order',
         orderPublicId: order.publicId,
@@ -210,7 +210,7 @@ export async function ingestUsdtDepositInDb(
     const orderUpdate = await tx.order.updateMany({
       where: {
         id: order.id,
-        status: 'awaiting_deposit',
+        status: order.status,
       },
       data: {
         status: nextOrderStatus,
@@ -224,7 +224,7 @@ export async function ingestUsdtDepositInDb(
     const depositAddressUpdate = await tx.depositAddress.updateMany({
       where: {
         id: depositAddress.id,
-        status: 'reserved',
+        status: depositAddress.status,
       },
       data: {
         status: nextDepositAddressStatus,
@@ -266,6 +266,18 @@ export async function ingestUsdtDepositInDb(
       depositAddressStatus: nextDepositAddressStatus,
     };
   });
+}
+
+function isDepositAddressOpenForIngestion(
+  status: DepositAddressStatus,
+): status is 'reserved' | 'expired' {
+  return status === 'reserved' || status === 'expired';
+}
+
+function isOrderOpenForDepositIngestion(
+  status: OrderStatus,
+): status is 'awaiting_deposit' | 'expired' {
+  return status === 'awaiting_deposit' || status === 'expired';
 }
 
 function decideNextOrderStatus(input: {

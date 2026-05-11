@@ -19,4 +19,10 @@ describe('package scripts', () => {
       'node dist/src/tron/configureWatcherCursorCli.js',
     );
   });
+
+  it('expires open orders from built JavaScript in production', () => {
+    expect(packageJson.scripts['orders:expire-open']).toBe(
+      'node dist/src/orders/expireOrdersCli.js',
+    );
+  });
 });

@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "wallet:generate-address-pool": "tsx src/wallet/generateAddressPoolCli.ts",
     "tron:watch-deposits-once": "node dist/src/tron/watchDepositsOnceCli.js",
-    "tron:configure-watcher-cursor": "node dist/src/tron/configureWatcherCursorCli.js"
+    "tron:configure-watcher-cursor": "node dist/src/tron/configureWatcherCursorCli.js",
+    "orders:expire-open": "node dist/src/orders/expireOrdersCli.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

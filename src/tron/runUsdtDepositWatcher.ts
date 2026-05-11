@@ -13,13 +13,17 @@ export interface DepositWatcherDb extends DepositIngestionDb {
       where: {
         network: 'TRON';
         asset: 'USDT';
-        status: Extract<DepositAddressStatus, 'reserved'>;
+        status: {
+          in: Array<Extract<DepositAddressStatus, 'reserved' | 'expired'>>;
+        };
         derivationIndex?: {
           gt: number;
         };
         order: {
           is: {
-            status: 'awaiting_deposit';
+            status: {
+              in: Array<'awaiting_deposit' | 'expired'>;
+            };
           };
         };
       };
@@ -76,7 +80,9 @@ export async function runUsdtDepositWatcher(
       where: {
         network: 'TRON',
         asset: 'USDT',
-        status: 'reserved',
+        status: {
+          in: ['reserved', 'expired'],
+        },
         ...(lastDerivationIndex === undefined
           ? {}
           : {
@@ -86,7 +92,9 @@ export async function runUsdtDepositWatcher(
             }),
         order: {
           is: {
-            status: 'awaiting_deposit',
+            status: {
+              in: ['awaiting_deposit', 'expired'],
+            },
           },
         },
       },
