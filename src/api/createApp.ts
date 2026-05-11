@@ -10,9 +10,17 @@ import {
   createSellUsdtOrderInDb,
   type OrderApplicationDb,
 } from '../orders/orderApplicationService.js';
-import { validateTelegramInitData } from '../telegram/validateInitData.js';
+import {
+  validateTelegramInitData,
+} from '../telegram/validateInitData.js';
+import {
+  resolveTelegramUserInDb,
+  type TelegramUserDb,
+} from '../users/telegramUserService.js';
 
-export type ApiDb<TOrder> = AddressPoolImportDb & OrderApplicationDb<TOrder>;
+export type ApiDb<TOrder> = AddressPoolImportDb &
+  OrderApplicationDb<TOrder> &
+  TelegramUserDb;
 
 export interface CreateApiAppOptions<TOrder> {
   db: ApiDb<TOrder>;
@@ -38,7 +46,7 @@ const addressPoolImportBodySchema = z.object({
 });
 
 const baseOrderBodySchema = z.object({
-  userId: z.string(),
+  userId: z.string().optional(),
   amountUsdt: z.string(),
   amountRub: z.string(),
   rateSnapshot: z.string(),
@@ -73,6 +81,8 @@ const DOMAIN_VALIDATION_PATTERNS = [
 ];
 
 const TELEGRAM_AUTH_ERROR_MESSAGES = new Set([
+  'Telegram initData authorization is required',
+  'Telegram initData authorization must use tma scheme',
   'initData hash is required',
   'initData signature is invalid',
   'auth_date is required',
@@ -81,6 +91,7 @@ const TELEGRAM_AUTH_ERROR_MESSAGES = new Set([
   'initData is expired',
   'user must be valid JSON',
   'user.id is required',
+  'telegram user is required',
 ]);
 
 export function createApiApp<TOrder>(
@@ -126,9 +137,17 @@ export function createApiApp<TOrder>(
 
   app.post('/api/orders/buy', async (request, reply) => {
     const body = parseBody(buyOrderBodySchema, request.body);
+    const userId = await resolveRequestUserId({
+      db: options.db,
+      authorization: request.headers.authorization,
+      bodyUserId: body.userId,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: now(),
+    });
     const order = await createBuyUsdtOrderInDb(options.db, {
       publicId: publicIdFactory(),
-      userId: body.userId,
+      userId,
       amountUsdt: body.amountUsdt,
       amountRub: body.amountRub,
       rateSnapshot: body.rateSnapshot,
@@ -143,9 +162,17 @@ export function createApiApp<TOrder>(
 
   app.post('/api/orders/sell', async (request, reply) => {
     const body = parseBody(sellOrderBodySchema, request.body);
+    const userId = await resolveRequestUserId({
+      db: options.db,
+      authorization: request.headers.authorization,
+      bodyUserId: body.userId,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: now(),
+    });
     const order = await createSellUsdtOrderInDb(options.db, {
       publicId: publicIdFactory(),
-      userId: body.userId,
+      userId,
       amountUsdt: body.amountUsdt,
       amountRub: body.amountRub,
       rateSnapshot: body.rateSnapshot,
@@ -200,6 +227,48 @@ export function createApiApp<TOrder>(
 
 function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
   return schema.parse(body);
+}
+
+async function resolveRequestUserId(input: {
+  db: TelegramUserDb;
+  authorization: string | undefined;
+  bodyUserId: string | undefined;
+  botToken: string | undefined;
+  maxAgeSeconds: number | undefined;
+  now: Date;
+}): Promise<string> {
+  if (!input.botToken) {
+    if (!input.bodyUserId) {
+      throw new Error('userId is required');
+    }
+    return input.bodyUserId;
+  }
+
+  const validated = validateTelegramInitData({
+    initData: readTelegramInitDataAuthorization(input.authorization),
+    botToken: input.botToken,
+    now: input.now,
+    maxAgeSeconds: input.maxAgeSeconds,
+  });
+  const resolved = await resolveTelegramUserInDb({
+    db: input.db,
+    telegramUser: validated.user,
+  });
+
+  return resolved.userId;
+}
+
+function readTelegramInitDataAuthorization(authorization: string | undefined): string {
+  if (!authorization) {
+    throw new Error('Telegram initData authorization is required');
+  }
+
+  const [scheme, ...rest] = authorization.split(' ');
+  if (scheme !== 'tma' || rest.length === 0) {
+    throw new Error('Telegram initData authorization must use tma scheme');
+  }
+
+  return rest.join(' ');
 }
 
 function isAddressPoolUnavailable(error: unknown): error is Error {

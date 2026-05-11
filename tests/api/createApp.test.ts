@@ -55,6 +55,12 @@ function createDb(
     order: {
       create: vi.fn(async ({ data }) => createPersistedOrder(data)),
     },
+    telegramProfile: {
+      upsert: vi.fn(async () => ({
+        userId: 'telegram-user-1',
+        telegramUserId: 462656683n,
+      })),
+    },
     $transaction: vi.fn(async (fn) => fn(tx)),
   };
 }
@@ -71,6 +77,17 @@ function createTelegramInitData(fields: Record<string, string>): string {
   const params = new URLSearchParams(fields);
   params.set('hash', hash);
   return params.toString();
+}
+
+function createTelegramAuthorizationHeader(): string {
+  return `tma ${createTelegramInitData({
+    auth_date: '1778490000',
+    user: JSON.stringify({
+      id: 462656683,
+      first_name: 'Pavel',
+      username: 'pavel',
+    }),
+  })}`;
 }
 
 describe('createApiApp', () => {
@@ -194,6 +211,62 @@ describe('createApiApp', () => {
     await app.close();
   });
 
+  it('creates BUY orders for Telegram-authenticated users without body userId', async () => {
+    const db = createDb();
+    const app = createApiApp({
+      db,
+      telegramBotToken: BOT_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E97012',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/orders/buy',
+      headers: {
+        authorization: createTelegramAuthorizationHeader(),
+      },
+      payload: {
+        amountUsdt: '2602.400000',
+        amountRub: '200000.00',
+        rateSnapshot: '76.850000',
+        clientPayoutAddress: PAYOUT_ADDRESS,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(db.telegramProfile.upsert).toHaveBeenCalledWith({
+      where: {
+        telegramUserId: 462656683n,
+      },
+      update: {
+        username: 'pavel',
+        firstName: 'Pavel',
+        lastName: undefined,
+      },
+      create: {
+        telegramUserId: 462656683n,
+        username: 'pavel',
+        firstName: 'Pavel',
+        lastName: undefined,
+        user: {
+          create: {},
+        },
+      },
+      select: {
+        userId: true,
+        telegramUserId: true,
+      },
+    });
+    expect(db.order.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        publicId: 'E97012',
+        userId: 'telegram-user-1',
+      }),
+    });
+    await app.close();
+  });
+
   it('ignores client-supplied public ids and generates them server-side', async () => {
     const db = createDb();
     const app = createApiApp({
@@ -266,6 +339,67 @@ describe('createApiApp', () => {
         reservedAt: NOW,
         expiresAt: new Date('2026-05-11T10:00:00.000Z'),
       },
+    });
+    await app.close();
+  });
+
+  it('requires Telegram initData authorization for SELL orders when bot token is configured', async () => {
+    const app = createApiApp({
+      db: createDb(),
+      telegramBotToken: BOT_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/orders/sell',
+      payload: {
+        userId: 'spoofed-user',
+        amountUsdt: '5000.000000',
+        amountRub: '381250.00',
+        rateSnapshot: '76.250000',
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: 'telegram_auth_invalid',
+      message: 'Telegram initData authorization is required',
+    });
+    await app.close();
+  });
+
+  it('creates SELL orders for Telegram-authenticated users and ignores body userId', async () => {
+    const tx = createTx();
+    const db = createDb(tx);
+    const app = createApiApp({
+      db,
+      telegramBotToken: BOT_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/orders/sell',
+      headers: {
+        authorization: createTelegramAuthorizationHeader(),
+      },
+      payload: {
+        userId: 'spoofed-user',
+        amountUsdt: '5000.000000',
+        amountRub: '381250.00',
+        rateSnapshot: '76.250000',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(tx.order.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'telegram-user-1',
+        depositAddressId: 'addr-1',
+      }),
     });
     await app.close();
   });
