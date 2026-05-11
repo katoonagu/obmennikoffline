@@ -1,6 +1,8 @@
 import { HDNodeWallet } from 'ethers';
 import { utils as tronUtils } from 'tronweb';
 
+const MAX_NON_HARDENED_BIP32_INDEX = 0x80000000 - 1;
+
 export interface DerivedTronAddress {
   index: number;
   derivationPath: string;
@@ -37,7 +39,11 @@ export function deriveTronAddress(input: DeriveTronAddressInput): DerivedTronAdd
 }
 
 function assertSafeIndex(index: number): void {
-  if (!Number.isSafeInteger(index) || index < 0) {
+  if (
+    !Number.isSafeInteger(index) ||
+    index < 0 ||
+    index > MAX_NON_HARDENED_BIP32_INDEX
+  ) {
     throw new Error('index must be a safe non-negative integer');
   }
 }

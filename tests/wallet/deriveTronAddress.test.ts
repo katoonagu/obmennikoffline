@@ -26,5 +26,8 @@ describe('deriveTronAddress', () => {
     expect(() => deriveTronAddress({ mnemonic: MNEMONIC, index: 1.5 })).toThrow(
       'index must be a safe non-negative integer',
     );
+    expect(() =>
+      deriveTronAddress({ mnemonic: MNEMONIC, index: 0x80000000 }),
+    ).toThrow('index must be a safe non-negative integer');
   });
 });
