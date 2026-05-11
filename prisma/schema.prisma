@@ -134,6 +134,20 @@ model BlockchainTransaction {
   @@index([toAddress])
 }
 
+model WatcherCursor {
+  id                 String   @id
+  network            Network
+  asset              Asset
+  lastProcessedBlock BigInt
+  confirmationDepth  Int
+  maxBlockRange      Int
+  lastRunAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([network, asset])
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   actorId    String?
