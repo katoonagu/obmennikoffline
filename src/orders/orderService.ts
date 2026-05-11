@@ -37,10 +37,11 @@ export interface CreateBuyUsdtOrderInput extends BaseOrderInput {
 }
 
 export function createSellUsdtOrder(input: CreateSellUsdtOrderInput): CreatedOrder {
+  assertBaseOrderInput(input);
   assertPositiveTtl(input.rateTtlMinutes, 'rateTtlMinutes');
   assertPositiveTtl(input.orderTtlMinutes, 'orderTtlMinutes');
 
-  if (!input.depositAddressId) {
+  if (!input.depositAddressId.trim()) {
     throw new Error('depositAddressId is required for SELL_USDT order');
   }
 
@@ -62,6 +63,7 @@ export function createSellUsdtOrder(input: CreateSellUsdtOrderInput): CreatedOrd
 }
 
 export function createBuyUsdtOrder(input: CreateBuyUsdtOrderInput): CreatedOrder {
+  assertBaseOrderInput(input);
   assertPositiveTtl(input.rateTtlMinutes, 'rateTtlMinutes');
   assertPositiveTtl(input.orderTtlMinutes, 'orderTtlMinutes');
   assertTronAddress(input.clientPayoutAddress, 'clientPayoutAddress');
@@ -85,6 +87,33 @@ export function createBuyUsdtOrder(input: CreateBuyUsdtOrderInput): CreatedOrder
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
+}
+
+function assertBaseOrderInput(input: BaseOrderInput): void {
+  assertRequiredString(input.publicId, 'publicId');
+  assertRequiredString(input.userId, 'userId');
+  assertPositiveDecimalString(input.amountUsdt, 'amountUsdt');
+  assertPositiveDecimalString(input.amountRub, 'amountRub');
+  assertPositiveDecimalString(input.rateSnapshot, 'rateSnapshot');
+  assertValidDate(input.now, 'now');
+}
+
+function assertRequiredString(value: string, fieldName: string): void {
+  if (!value.trim()) {
+    throw new Error(`${fieldName} is required`);
+  }
+}
+
+function assertPositiveDecimalString(value: string, fieldName: string): void {
+  if (!/^\d+(?:\.\d+)?$/.test(value) || !Number.isFinite(Number(value)) || Number(value) <= 0) {
+    throw new Error(`${fieldName} must be a positive decimal string`);
+  }
+}
+
+function assertValidDate(value: Date, fieldName: string): void {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new Error(`${fieldName} must be a valid Date`);
+  }
 }
 
 function assertPositiveTtl(value: number, fieldName: string): void {

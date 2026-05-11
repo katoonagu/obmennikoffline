@@ -77,9 +77,36 @@ describe('orderService', () => {
         now: new Date('2026-05-11T09:00:00.000Z'),
         rateTtlMinutes: 20,
         orderTtlMinutes: 60,
-        depositAddressId: '',
+        depositAddressId: '   ',
       }),
     ).toThrow('depositAddressId is required for SELL_USDT order');
+  });
+
+  it.each([
+    ['SELL_USDT', 'publicId', 'publicId is required'],
+    ['BUY_USDT', 'publicId', 'publicId is required'],
+    ['SELL_USDT', 'userId', 'userId is required'],
+    ['BUY_USDT', 'userId', 'userId is required'],
+  ] as const)('rejects %s when %s is blank', (direction, fieldName, message) => {
+    expect(() => createOrderForTest(direction, { [fieldName]: '   ' })).toThrow(message);
+  });
+
+  it.each(['SELL_USDT', 'BUY_USDT'] as const)('rejects %s when now is invalid', (direction) => {
+    expect(() => createOrderForTest(direction, { now: new Date('invalid') })).toThrow(
+      'now must be a valid Date',
+    );
+  });
+
+  it.each(
+    (['amountUsdt', 'amountRub', 'rateSnapshot'] as const).flatMap((fieldName) =>
+      ['', '   ', 'abc', '-1', '0', 'Infinity', 'NaN'].flatMap((value) =>
+        (['SELL_USDT', 'BUY_USDT'] as const).map((direction) => [direction, fieldName, value] as const),
+      ),
+    ),
+  )('rejects %s when %s is an invalid decimal string: %s', (direction, fieldName, value) => {
+    expect(() => createOrderForTest(direction, { [fieldName]: value })).toThrow(
+      `${fieldName} must be a positive decimal string`,
+    );
   });
 
   it.each([
@@ -116,3 +143,35 @@ describe('orderService', () => {
     }).toThrow(`${fieldName} must be a positive integer`);
   });
 });
+
+type TestOrderDirection = 'SELL_USDT' | 'BUY_USDT';
+
+function createOrderForTest(direction: TestOrderDirection, overrides: Record<string, unknown>) {
+  if (direction === 'SELL_USDT') {
+    return createSellUsdtOrder({
+      publicId: 'E74737',
+      userId: 'user-1',
+      amountUsdt: '5000.000000',
+      amountRub: '381250.00',
+      rateSnapshot: '76.250000',
+      now: new Date('2026-05-11T09:00:00.000Z'),
+      rateTtlMinutes: 20,
+      orderTtlMinutes: 60,
+      depositAddressId: 'addr-1',
+      ...overrides,
+    } as Parameters<typeof createSellUsdtOrder>[0]);
+  }
+
+  return createBuyUsdtOrder({
+    publicId: 'E97010',
+    userId: 'user-1',
+    amountUsdt: '2602.400000',
+    amountRub: '200000.00',
+    rateSnapshot: '76.850000',
+    clientPayoutAddress: 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7',
+    now: new Date('2026-05-11T09:00:00.000Z'),
+    rateTtlMinutes: 20,
+    orderTtlMinutes: 60,
+    ...overrides,
+  } as Parameters<typeof createBuyUsdtOrder>[0]);
+}
