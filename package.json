@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint:types": "tsc -p tsconfig.json --noEmit",
+    "prisma:generate": "prisma generate",
     "wallet:generate-address-pool": "tsx src/wallet/generateAddressPoolCli.ts"
   },
   "dependencies": {
