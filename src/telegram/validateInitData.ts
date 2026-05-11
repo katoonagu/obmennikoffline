@@ -117,15 +117,23 @@ function parseTelegramUser(userRaw: string | null): TelegramInitDataUser | null 
     throw new Error('user.id is required');
   }
 
-  const user = parsed as TelegramInitDataUser;
+  const user = parsed as Record<string, unknown> & { id: number };
   return {
     id: user.id,
-    first_name: user.first_name,
-    last_name: user.last_name,
-    username: user.username,
-    language_code: user.language_code,
-    is_premium: user.is_premium,
+    first_name: optionalString(user.first_name),
+    last_name: optionalString(user.last_name),
+    username: optionalString(user.username),
+    language_code: optionalString(user.language_code),
+    is_premium: optionalBoolean(user.is_premium),
   };
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function safeEqualHex(left: string, right: string): boolean {

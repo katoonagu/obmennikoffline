@@ -79,6 +79,22 @@ describe('validateTelegramInitData', () => {
     ).toThrow('initData hash is required');
   });
 
+  it('rejects malformed hash values without throwing buffer errors', () => {
+    const params = new URLSearchParams({
+      auth_date: '1778490000',
+      user: JSON.stringify({ id: 462656683 }),
+      hash: 'not-hex',
+    });
+
+    expect(() =>
+      validateTelegramInitData({
+        initData: params.toString(),
+        botToken: BOT_TOKEN,
+        now: NOW,
+      }),
+    ).toThrow('initData signature is invalid');
+  });
+
   it('rejects expired initData', () => {
     const initData = createInitData({
       auth_date: '1778400000',
@@ -123,5 +139,47 @@ describe('validateTelegramInitData', () => {
         now: NOW,
       }),
     ).toThrow('user.id is required');
+  });
+
+  it('rejects Telegram user values that are not valid JSON', () => {
+    const initData = createInitData({
+      auth_date: '1778490000',
+      user: '{bad json',
+    });
+
+    expect(() =>
+      validateTelegramInitData({
+        initData,
+        botToken: BOT_TOKEN,
+        now: NOW,
+      }),
+    ).toThrow('user must be valid JSON');
+  });
+
+  it('drops optional Telegram user fields with unexpected runtime types', () => {
+    const initData = createInitData({
+      auth_date: '1778490000',
+      user: JSON.stringify({
+        id: 462656683,
+        first_name: 123,
+        username: 'pavel',
+        is_premium: 'yes',
+      }),
+    });
+
+    expect(
+      validateTelegramInitData({
+        initData,
+        botToken: BOT_TOKEN,
+        now: NOW,
+      }).user,
+    ).toEqual({
+      id: 462656683,
+      first_name: undefined,
+      last_name: undefined,
+      username: 'pavel',
+      language_code: undefined,
+      is_premium: undefined,
+    });
   });
 });
