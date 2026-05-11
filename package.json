@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "lint:types": "tsc -p tsconfig.json --noEmit",
     "prisma:generate": "prisma generate",
-    "wallet:generate-address-pool": "tsx src/wallet/generateAddressPoolCli.ts"
+    "wallet:generate-address-pool": "tsx src/wallet/generateAddressPoolCli.ts",
+    "tron:watch-deposits-once": "node dist/src/tron/watchDepositsOnceCli.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
