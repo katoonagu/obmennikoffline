@@ -26,6 +26,12 @@ function makeEvent(overrides: Partial<TronTransferEvent> = {}): TronTransferEven
   };
 }
 
+function asEventOverride(
+  overrides: Record<string, unknown>,
+): Partial<TronTransferEvent> {
+  return overrides as Partial<TronTransferEvent>;
+}
+
 describe('normalizeUsdtTransfer', () => {
   it('normalizes a TRC20 USDT transfer event', () => {
     const event = makeEvent();
@@ -69,10 +75,58 @@ describe('normalizeUsdtTransfer', () => {
     );
   });
 
+  it('rejects empty tx ids', () => {
+    expect(() => normalizeUsdtTransfer(makeEvent({ txId: '' }))).toThrow(
+      'txId is required',
+    );
+  });
+
+  it.each([-1, 1.5, Number.NaN])(
+    'rejects invalid log indexes: %s',
+    (logIndex) => {
+      expect(() => normalizeUsdtTransfer(makeEvent({ logIndex }))).toThrow(
+        'logIndex must be a safe non-negative integer',
+      );
+    },
+  );
+
+  it('rejects invalid block numbers', () => {
+    expect(() => normalizeUsdtTransfer(makeEvent({ blockNumber: -1n }))).toThrow(
+      'blockNumber must be a non-negative bigint',
+    );
+    expect(() =>
+      normalizeUsdtTransfer(makeEvent(asEventOverride({ blockNumber: 1 }))),
+    ).toThrow('blockNumber must be a non-negative bigint');
+  });
+
+  it('rejects invalid block timestamps', () => {
+    expect(() =>
+      normalizeUsdtTransfer(makeEvent({ blockTimestamp: new Date('invalid') })),
+    ).toThrow('blockTimestamp must be a valid Date');
+    expect(() =>
+      normalizeUsdtTransfer(
+        makeEvent(asEventOverride({ blockTimestamp: '2026-05-11T10:15:30.000Z' })),
+      ),
+    ).toThrow('blockTimestamp must be a valid Date');
+  });
+
   it('formats small raw amounts with 6 decimals', () => {
     expect(normalizeUsdtTransfer(makeEvent({ amountRaw: '1' })).amount).toBe(
       '0.000001',
     );
+  });
+
+  it('formats one whole USDT with 6 decimals', () => {
+    expect(normalizeUsdtTransfer(makeEvent({ amountRaw: '1000000' })).amount).toBe(
+      '1.000000',
+    );
+  });
+
+  it('formats very large raw amounts deterministically', () => {
+    expect(
+      normalizeUsdtTransfer(makeEvent({ amountRaw: '123456789012345678901234' }))
+        .amount,
+    ).toBe('123456789012345678.901234');
   });
 
   it('accepts zero raw amount', () => {

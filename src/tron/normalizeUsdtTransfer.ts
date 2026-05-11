@@ -32,6 +32,10 @@ export function normalizeUsdtTransfer(
 
   assertTronAddress(event.fromAddress, 'fromAddress');
   assertTronAddress(event.toAddress, 'toAddress');
+  assertTxId(event.txId);
+  assertLogIndex(event.logIndex);
+  assertBlockNumber(event.blockNumber);
+  assertBlockTimestamp(event.blockTimestamp);
 
   return {
     network: 'TRON',
@@ -44,6 +48,34 @@ export function normalizeUsdtTransfer(
     blockNumber: event.blockNumber,
     blockTimestamp: event.blockTimestamp,
   };
+}
+
+function assertTxId(txId: unknown): asserts txId is string {
+  if (typeof txId !== 'string' || txId.length === 0) {
+    throw new Error('txId is required');
+  }
+}
+
+function assertLogIndex(logIndex: unknown): asserts logIndex is number {
+  if (
+    typeof logIndex !== 'number' ||
+    !Number.isSafeInteger(logIndex) ||
+    logIndex < 0
+  ) {
+    throw new Error('logIndex must be a safe non-negative integer');
+  }
+}
+
+function assertBlockNumber(blockNumber: unknown): asserts blockNumber is bigint {
+  if (typeof blockNumber !== 'bigint' || blockNumber < 0n) {
+    throw new Error('blockNumber must be a non-negative bigint');
+  }
+}
+
+function assertBlockTimestamp(blockTimestamp: unknown): asserts blockTimestamp is Date {
+  if (!(blockTimestamp instanceof Date) || Number.isNaN(blockTimestamp.getTime())) {
+    throw new Error('blockTimestamp must be a valid Date');
+  }
 }
 
 function formatUsdtAmount(amountRaw: string): string {
