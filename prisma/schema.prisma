@@ -87,6 +87,11 @@ model Order {
   depositAddress      DepositAddress?         @relation(fields: [depositAddressId], references: [id])
   transactions        BlockchainTransaction[]
   auditLogs           AuditLog[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, orderExpiresAt])
+  @@index([status, rateExpiresAt])
 }
 
 model DepositAddress {
@@ -102,6 +107,9 @@ model DepositAddress {
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
   order           Order?
+
+  @@index([network, asset, status, derivationIndex])
+  @@index([status, expiresAt])
 }
 
 model BlockchainTransaction {
@@ -133,4 +141,7 @@ model AuditLog {
   metadata   Json
   createdAt  DateTime @default(now())
   order      Order?   @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, createdAt])
+  @@index([entityType, entityId, createdAt])
 }
