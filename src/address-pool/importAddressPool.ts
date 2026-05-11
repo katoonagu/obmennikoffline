@@ -23,6 +23,14 @@ export function prepareAddressPoolImport(
     if (row.asset !== 'USDT') {
       throw new Error(`unsupported asset in import: ${row.asset}`);
     }
+    if (
+      !Number.isSafeInteger(row.derivationIndex) ||
+      row.derivationIndex < 0
+    ) {
+      throw new Error(
+        `invalid derivation_index in import: ${row.derivationIndex}`,
+      );
+    }
     if (seenIndexes.has(row.derivationIndex)) {
       throw new Error(
         `duplicate derivation_index in import: ${row.derivationIndex}`,

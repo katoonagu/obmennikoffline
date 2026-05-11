@@ -58,4 +58,60 @@ describe('prepareAddressPoolImport', () => {
       ]),
     ).toThrow('duplicate address in import: TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY');
   });
+
+  it('rejects unsupported networks', () => {
+    expect(() =>
+      prepareAddressPoolImport([
+        {
+          network: 'ETH' as 'TRON',
+          asset: 'USDT',
+          derivationIndex: 0,
+          address: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
+        },
+      ]),
+    ).toThrow('unsupported network in import: ETH');
+  });
+
+  it('rejects unsupported assets', () => {
+    expect(() =>
+      prepareAddressPoolImport([
+        {
+          network: 'TRON',
+          asset: 'TRX' as 'USDT',
+          derivationIndex: 0,
+          address: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
+        },
+      ]),
+    ).toThrow('unsupported asset in import: TRX');
+  });
+
+  it('rejects invalid TRON addresses', () => {
+    expect(() =>
+      prepareAddressPoolImport([
+        {
+          network: 'TRON',
+          asset: 'USDT',
+          derivationIndex: 0,
+          address: 'not-a-tron-address',
+        },
+      ]),
+    ).toThrow('address must be a valid TRON base58 address');
+  });
+
+  it('rejects invalid derivation indexes from direct callers', () => {
+    const invalidIndexes = [-1, Number.NaN, Number.MAX_SAFE_INTEGER + 1];
+
+    for (const derivationIndex of invalidIndexes) {
+      expect(() =>
+        prepareAddressPoolImport([
+          {
+            network: 'TRON',
+            asset: 'USDT',
+            derivationIndex,
+            address: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
+          },
+        ]),
+      ).toThrow(`invalid derivation_index in import: ${derivationIndex}`);
+    }
+  });
 });
