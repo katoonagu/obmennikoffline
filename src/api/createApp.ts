@@ -11,6 +11,13 @@ import {
   type OrderApplicationDb,
 } from '../orders/orderApplicationService.js';
 import {
+  getOrderByPublicId,
+  getUserProfile,
+  listActiveOrders,
+  listHistoryOrders,
+  type OrderReadDb,
+} from '../orders/orderReadService.js';
+import {
   validateTelegramInitData,
 } from '../telegram/validateInitData.js';
 import {
@@ -20,6 +27,7 @@ import {
 
 export type ApiDb<TOrder> = AddressPoolImportDb &
   OrderApplicationDb<TOrder> &
+  OrderReadDb &
   TelegramUserDb;
 
 export interface CreateApiAppOptions<TOrder> {
@@ -64,8 +72,21 @@ const telegramInitDataBodySchema = z.object({
   initData: z.string().min(1),
 });
 
+const userQuerySchema = z.object({
+  userId: z.string().optional(),
+});
+
+const orderListQuerySchema = userQuerySchema.extend({
+  limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
+const orderParamsSchema = z.object({
+  publicId: z.string().min(1),
+});
+
 const DOMAIN_VALIDATION_PATTERNS = [
   /^(publicId|userId) is required$/,
+  /^limit must be a positive integer up to 100$/,
   /^depositAddressId is required for SELL_USDT order$/,
   /^(clientPayoutAddress|address) must be a valid TRON base58 address$/,
   /^(amountUsdt|amountRub|rateSnapshot) must be a positive decimal string$/,
@@ -135,12 +156,89 @@ export function createApiApp<TOrder>(
     });
   }
 
+  app.get('/api/orders/active', async (request, reply) => {
+    const query = parseBody(orderListQuerySchema, request.query);
+    const userId = await resolveRequestUserId({
+      db: options.db,
+      authorization: request.headers.authorization,
+      fallbackUserId: query.userId,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: now(),
+    });
+    const orders = await listActiveOrders(options.db, {
+      userId,
+      limit: query.limit,
+    });
+
+    return reply.send({ orders });
+  });
+
+  app.get('/api/orders/history', async (request, reply) => {
+    const query = parseBody(orderListQuerySchema, request.query);
+    const userId = await resolveRequestUserId({
+      db: options.db,
+      authorization: request.headers.authorization,
+      fallbackUserId: query.userId,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: now(),
+    });
+    const orders = await listHistoryOrders(options.db, {
+      userId,
+      limit: query.limit,
+    });
+
+    return reply.send({ orders });
+  });
+
+  app.get('/api/orders/:publicId', async (request, reply) => {
+    const params = parseBody(orderParamsSchema, request.params);
+    const query = parseBody(userQuerySchema, request.query);
+    const userId = await resolveRequestUserId({
+      db: options.db,
+      authorization: request.headers.authorization,
+      fallbackUserId: query.userId,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: now(),
+    });
+    const order = await getOrderByPublicId(options.db, {
+      userId,
+      publicId: params.publicId,
+    });
+
+    if (!order) {
+      return reply.code(404).send({
+        error: 'not_found',
+        message: 'order not found',
+      });
+    }
+
+    return reply.send({ order });
+  });
+
+  app.get('/api/profile', async (request, reply) => {
+    const query = parseBody(userQuerySchema, request.query);
+    const userId = await resolveRequestUserId({
+      db: options.db,
+      authorization: request.headers.authorization,
+      fallbackUserId: query.userId,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: now(),
+    });
+    const profile = await getUserProfile(options.db, { userId });
+
+    return reply.send({ profile });
+  });
+
   app.post('/api/orders/buy', async (request, reply) => {
     const body = parseBody(buyOrderBodySchema, request.body);
     const userId = await resolveRequestUserId({
       db: options.db,
       authorization: request.headers.authorization,
-      bodyUserId: body.userId,
+      fallbackUserId: body.userId,
       botToken: options.telegramBotToken,
       maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
       now: now(),
@@ -165,7 +263,7 @@ export function createApiApp<TOrder>(
     const userId = await resolveRequestUserId({
       db: options.db,
       authorization: request.headers.authorization,
-      bodyUserId: body.userId,
+      fallbackUserId: body.userId,
       botToken: options.telegramBotToken,
       maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
       now: now(),
@@ -232,16 +330,16 @@ function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
 async function resolveRequestUserId(input: {
   db: TelegramUserDb;
   authorization: string | undefined;
-  bodyUserId: string | undefined;
+  fallbackUserId: string | undefined;
   botToken: string | undefined;
   maxAgeSeconds: number | undefined;
   now: Date;
 }): Promise<string> {
   if (!input.botToken) {
-    if (!input.bodyUserId) {
+    if (!input.fallbackUserId) {
       throw new Error('userId is required');
     }
-    return input.bodyUserId;
+    return input.fallbackUserId;
   }
 
   const validated = validateTelegramInitData({
