@@ -94,9 +94,9 @@ function addMinutes(date: Date, minutes: number): Date {
 function assertBaseOrderInput(input: BaseOrderInput): void {
   assertRequiredString(input.publicId, 'publicId');
   assertRequiredString(input.userId, 'userId');
-  assertPositiveDecimalString(input.amountUsdt, 'amountUsdt');
-  assertPositiveDecimalString(input.amountRub, 'amountRub');
-  assertPositiveDecimalString(input.rateSnapshot, 'rateSnapshot');
+  assertPositiveDecimalString(input.amountUsdt, 'amountUsdt', 6);
+  assertPositiveDecimalString(input.amountRub, 'amountRub', 2);
+  assertPositiveDecimalString(input.rateSnapshot, 'rateSnapshot', 6);
   assertValidDate(input.now, 'now');
 }
 
@@ -106,13 +106,18 @@ function assertRequiredString(value: unknown, fieldName: string, message = `${fi
   }
 }
 
-function assertPositiveDecimalString(value: unknown, fieldName: string): void {
+function assertPositiveDecimalString(value: unknown, fieldName: string, scale: number): void {
   if (typeof value !== 'string') {
     throw new Error(`${fieldName} must be a positive decimal string`);
   }
 
-  if (!/^\d+(?:\.\d+)?$/.test(value) || !Number.isFinite(Number(value)) || Number(value) <= 0) {
+  if (!/^\d+(?:\.\d+)?$/.test(value) || !/[1-9]/.test(value.replace('.', ''))) {
     throw new Error(`${fieldName} must be a positive decimal string`);
+  }
+
+  const [integerPart, fractionalPart = ''] = value.split('.');
+  if (fractionalPart.length > scale || integerPart.length + fractionalPart.length > 36) {
+    throw new Error(`${fieldName} must fit Decimal(36, ${scale})`);
   }
 }
 

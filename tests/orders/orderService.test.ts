@@ -133,6 +133,21 @@ describe('orderService', () => {
     );
   });
 
+  it.each(
+    [
+      ['amountUsdt', '1.1234567', 'amountUsdt must fit Decimal(36, 6)'],
+      ['amountRub', '1.123', 'amountRub must fit Decimal(36, 2)'],
+      ['rateSnapshot', '1.1234567', 'rateSnapshot must fit Decimal(36, 6)'],
+      ['amountUsdt', '1234567890123456789012345678901234567', 'amountUsdt must fit Decimal(36, 6)'],
+      ['amountRub', '1234567890123456789012345678901234567', 'amountRub must fit Decimal(36, 2)'],
+      ['rateSnapshot', '1234567890123456789012345678901234567', 'rateSnapshot must fit Decimal(36, 6)'],
+    ].flatMap(([fieldName, value, message]) =>
+      (['SELL_USDT', 'BUY_USDT'] as const).map((direction) => [direction, fieldName, value, message] as const),
+    ),
+  )('rejects %s when %s exceeds decimal precision or scale', (direction, fieldName, value, message) => {
+    expect(() => createOrderForTest(direction, { [fieldName]: value })).toThrow(message);
+  });
+
   it.each([null, 123] as const)(
     'rejects SELL_USDT when depositAddressId is a non-string runtime value: %s',
     (value) => {

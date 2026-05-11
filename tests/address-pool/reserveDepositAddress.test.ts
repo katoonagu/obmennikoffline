@@ -51,6 +51,28 @@ describe('reserveDepositAddress', () => {
     ).toThrow('ttlMinutes must be a positive integer');
   });
 
+  it('throws when now is invalid', () => {
+    expect(() =>
+      reserveDepositAddress({
+        addresses: [{ id: 'addr-1', derivationIndex: 1, status: 'available' }],
+        orderId: 'order-1',
+        now: new Date('invalid'),
+        ttlMinutes: 60,
+      }),
+    ).toThrow('now must be a valid Date');
+  });
+
+  it('throws when ttlMinutes produces an invalid expiry date', () => {
+    expect(() =>
+      reserveDepositAddress({
+        addresses: [{ id: 'addr-1', derivationIndex: 1, status: 'available' }],
+        orderId: 'order-1',
+        now: new Date('2026-05-11T09:00:00.000Z'),
+        ttlMinutes: Number.MAX_SAFE_INTEGER,
+      }),
+    ).toThrow('ttlMinutes produces an invalid expiry date');
+  });
+
   it.each([-1, Number.MAX_SAFE_INTEGER + 1, Number.NaN])(
     'throws when an available derivationIndex is %s',
     (derivationIndex) => {

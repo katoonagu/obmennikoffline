@@ -10,10 +10,11 @@ import {
 
 const FROM_ADDRESS = 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY';
 const TO_ADDRESS = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+const TX_ID = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 function makeEvent(overrides: Partial<TronTransferEvent> = {}): TronTransferEvent {
   return {
-    txId: '6f2f8a8da2f8b8fbc36cc2b379f0226a6d487f2f4e7d7f61f4f2e8cc6a8a1234',
+    txId: TX_ID,
     logIndex: 7,
     contractAddress: USDT_TRC20_CONTRACT_ADDRESS,
     fromAddress: FROM_ADDRESS,
@@ -41,7 +42,7 @@ describe('normalizeUsdtTransfer', () => {
     expect(normalized).toEqual<NormalizedBlockchainTransaction>({
       network: 'TRON',
       asset: 'USDT',
-      txId: '6f2f8a8da2f8b8fbc36cc2b379f0226a6d487f2f4e7d7f61f4f2e8cc6a8a1234',
+      txId: TX_ID,
       logIndex: 7,
       fromAddress: FROM_ADDRESS,
       toAddress: TO_ADDRESS,
@@ -75,9 +76,9 @@ describe('normalizeUsdtTransfer', () => {
     );
   });
 
-  it('rejects empty tx ids', () => {
-    expect(() => normalizeUsdtTransfer(makeEvent({ txId: '' }))).toThrow(
-      'txId is required',
+  it.each(['', 'abc123', `${TX_ID.slice(0, 63)}z`])('rejects invalid tx ids: %s', (txId) => {
+    expect(() => normalizeUsdtTransfer(makeEvent({ txId }))).toThrow(
+      'txId must be a 64-character hex string',
     );
   });
 
@@ -127,6 +128,12 @@ describe('normalizeUsdtTransfer', () => {
       normalizeUsdtTransfer(makeEvent({ amountRaw: '123456789012345678901234' }))
         .amount,
     ).toBe('123456789012345678.901234');
+  });
+
+  it('rejects raw amounts that exceed Decimal(36, 6)', () => {
+    expect(() =>
+      normalizeUsdtTransfer(makeEvent({ amountRaw: '1234567890123456789012345678901234567' })),
+    ).toThrow('amountRaw must fit Decimal(36, 6)');
   });
 
   it('accepts zero raw amount', () => {

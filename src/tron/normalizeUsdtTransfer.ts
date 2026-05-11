@@ -51,8 +51,8 @@ export function normalizeUsdtTransfer(
 }
 
 function assertTxId(txId: unknown): asserts txId is string {
-  if (typeof txId !== 'string' || txId.length === 0) {
-    throw new Error('txId is required');
+  if (typeof txId !== 'string' || !/^[0-9a-fA-F]{64}$/.test(txId)) {
+    throw new Error('txId must be a 64-character hex string');
   }
 }
 
@@ -79,13 +79,18 @@ function assertBlockTimestamp(blockTimestamp: unknown): asserts blockTimestamp i
 }
 
 function formatUsdtAmount(amountRaw: string): string {
-  if (!/^\d+$/.test(amountRaw)) {
+  if (typeof amountRaw !== 'string' || !/^\d+$/.test(amountRaw)) {
     throw new Error('amountRaw must be a non-negative integer string');
   }
 
   const raw = BigInt(amountRaw);
   const whole = raw / 1_000_000n;
   const fractional = raw % 1_000_000n;
+  const wholePart = whole.toString();
 
-  return `${whole}.${fractional.toString().padStart(USDT_TRC20_DECIMALS, '0')}`;
+  if (wholePart.length + USDT_TRC20_DECIMALS > 36) {
+    throw new Error('amountRaw must fit Decimal(36, 6)');
+  }
+
+  return `${wholePart}.${fractional.toString().padStart(USDT_TRC20_DECIMALS, '0')}`;
 }
