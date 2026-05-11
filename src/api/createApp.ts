@@ -49,6 +49,22 @@ const buyOrderBodySchema = baseOrderBodySchema.extend({
 
 const sellOrderBodySchema = baseOrderBodySchema;
 
+const DOMAIN_VALIDATION_PATTERNS = [
+  /^(publicId|userId) is required$/,
+  /^depositAddressId is required for SELL_USDT order$/,
+  /^(clientPayoutAddress|address) must be a valid TRON base58 address$/,
+  /^(amountUsdt|amountRub|rateSnapshot) must be a positive decimal string$/,
+  /^(amountUsdt|amountRub|rateSnapshot) must fit Decimal\(36, (2|6)\)$/,
+  /^(rateTtlMinutes|orderTtlMinutes|maxReservationAttempts|ttlMinutes) must be a positive integer$/,
+  /^now must be a valid Date$/,
+  /^(rateTtlMinutes|orderTtlMinutes|ttlMinutes) produces an invalid expiry date$/,
+  /^unsupported network in import: .+$/,
+  /^unsupported asset in import: .+$/,
+  /^invalid derivation_index in import: .+$/,
+  /^duplicate derivation_index in import: .+$/,
+  /^duplicate address in import: .+$/,
+];
+
 export function createApiApp<TOrder>(
   options: CreateApiAppOptions<TOrder>,
 ): FastifyInstance {
@@ -157,15 +173,7 @@ function isDomainValidationError(error: unknown): error is Error {
     return false;
   }
 
-  return (
-    error.message.endsWith('is required') ||
-    error.message.includes('must be a valid TRON base58 address') ||
-    error.message.includes('must be a positive decimal string') ||
-    error.message.includes('must fit Decimal') ||
-    error.message.includes('must be a positive integer') ||
-    error.message.includes('must be a valid Date') ||
-    error.message.includes('produces an invalid expiry date')
-  );
+  return DOMAIN_VALIDATION_PATTERNS.some((pattern) => pattern.test(error.message));
 }
 
 function createPublicId(): string {

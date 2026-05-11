@@ -378,7 +378,7 @@ describe('createApiApp', () => {
     const tx = createTx();
     const db = createDb(tx);
     vi.mocked(db.order.create).mockRejectedValueOnce(
-      new Error('database secret detail'),
+      new Error('database password is required'),
     );
     const app = createApiApp({
       db,
@@ -402,7 +402,7 @@ describe('createApiApp', () => {
     expect(response.json()).toEqual({
       error: 'internal_error',
     });
-    expect(response.body).not.toContain('database secret detail');
+    expect(response.body).not.toContain('database password is required');
     await app.close();
   });
 });
