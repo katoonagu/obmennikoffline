@@ -135,10 +135,7 @@ function createTx(input?: {
       })),
     },
     user: {
-      update: vi.fn(async ({ data }) => ({
-        id: 'user-1',
-        ...data,
-      })),
+      upsert: vi.fn(async ({ create }) => create),
     },
   };
 }
@@ -182,10 +179,7 @@ function createDb(
         customerFirstName: 'Pavel',
         customerMiddleName: 'Astrakhanov',
       })),
-      update: vi.fn(async ({ data }) => ({
-        id: 'user-1',
-        ...data,
-      })),
+      upsert: vi.fn(async ({ create }) => create),
     },
     order: {
       create: vi.fn(async ({ data }) => createPersistedOrder(data)),
@@ -1880,11 +1874,17 @@ describe('createApiApp', () => {
       now: NOW,
     });
     expect(db.$transaction).toHaveBeenCalledTimes(1);
-    expect(db._tx.user.update).toHaveBeenCalledWith({
+    expect(db._tx.user.upsert).toHaveBeenCalledWith({
       where: {
         id: 'user-1',
       },
-      data: {
+      create: {
+        id: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
+      update: {
         customerLastName: 'Alekseev',
         customerFirstName: 'Pavel',
         customerMiddleName: 'Astrakhanov',
@@ -2075,6 +2075,68 @@ describe('createApiApp', () => {
       });
     }
 
+    await app.close();
+  });
+
+  it('allows local dev-user fallback with Telegram token only when explicitly enabled', async () => {
+    const db = createDb({
+      readOrders: [createReadableOrder()],
+    });
+    const app = createApiApp({
+      db,
+      rateProvider: createStaticRateProvider(),
+      telegramBotToken: BOT_TOKEN,
+      allowMiniAppDevAuth: true,
+      now: () => NOW,
+      publicIdFactory: () => 'E97010',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/orders/active?userId=local-dev-user',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(db.telegramProfile.upsert).not.toHaveBeenCalled();
+    expect(db.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 'local-dev-user',
+        }),
+      }),
+    );
+    await app.close();
+  });
+
+  it('keeps Telegram identity ahead of fallback userId when dev auth is enabled', async () => {
+    const db = createDb({
+      readOrders: [createReadableOrder()],
+    });
+    const app = createApiApp({
+      db,
+      telegramBotToken: BOT_TOKEN,
+      allowMiniAppDevAuth: true,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/orders/active?userId=spoofed-user',
+      headers: {
+        authorization: createTelegramAuthorizationHeader(),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(db.telegramProfile.upsert).toHaveBeenCalled();
+    expect(db.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 'telegram-user-1',
+        }),
+      }),
+    );
     await app.close();
   });
 
@@ -2311,11 +2373,17 @@ describe('createApiApp', () => {
         userId: 'telegram-user-1',
       }),
     });
-    expect(db._tx.user.update).toHaveBeenCalledWith({
+    expect(db._tx.user.upsert).toHaveBeenCalledWith({
       where: {
         id: 'telegram-user-1',
       },
-      data: {
+      create: {
+        id: 'telegram-user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
+      update: {
         customerLastName: 'Alekseev',
         customerFirstName: 'Pavel',
         customerMiddleName: 'Astrakhanov',
@@ -2535,11 +2603,17 @@ describe('createApiApp', () => {
         depositAddressId: 'addr-1',
       }),
     });
-    expect(tx.user.update).toHaveBeenCalledWith({
+    expect(tx.user.upsert).toHaveBeenCalledWith({
       where: {
         id: 'telegram-user-1',
       },
-      data: {
+      create: {
+        id: 'telegram-user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
+      update: {
         customerLastName: 'Alekseev',
         customerFirstName: 'Pavel',
         customerMiddleName: 'Astrakhanov',

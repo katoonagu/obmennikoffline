@@ -10,6 +10,7 @@ export interface ServerConfig {
   enableAdminRoutes: boolean;
   telegramBotToken: string | undefined;
   telegramInitDataMaxAgeSeconds: number | undefined;
+  allowMiniAppDevAuth: boolean;
   miniAppCorsOrigins: string[] | undefined;
   rates: UsdtRubRates;
   port: number;
@@ -32,9 +33,15 @@ export function loadServerConfig(env: Env): ServerConfig {
     env,
     'TELEGRAM_INIT_DATA_MAX_AGE_SECONDS',
   );
+  const allowMiniAppDevAuth =
+    readOptionalBooleanEnv(env, 'MINIAPP_DEV_AUTH_ENABLED') ?? false;
   const miniAppCorsOrigins = readOptionalCorsOriginsEnv(env, 'MINIAPP_CORS_ORIGINS');
 
   if (readOptionalEnv(env, 'NODE_ENV') === 'production') {
+    if (allowMiniAppDevAuth) {
+      throw new Error('MINIAPP_DEV_AUTH_ENABLED must not be enabled in production');
+    }
+
     if (!telegramBotToken) {
       throw new Error('TELEGRAM_BOT_TOKEN is required in production');
     }
@@ -97,6 +104,7 @@ export function loadServerConfig(env: Env): ServerConfig {
     enableAdminRoutes: Boolean(adminApiToken),
     telegramBotToken,
     telegramInitDataMaxAgeSeconds,
+    allowMiniAppDevAuth,
     miniAppCorsOrigins,
     rates,
     port: readOptionalPositiveIntegerEnv(env, 'PORT') ?? 3000,
@@ -116,6 +124,19 @@ function readRequiredEnv(env: Env, name: string): string {
   }
 
   return value;
+}
+
+function readOptionalBooleanEnv(env: Env, name: string): boolean | undefined {
+  const value = readOptionalEnv(env, name);
+  if (!value) {
+    return undefined;
+  }
+
+  if (value !== 'true' && value !== 'false') {
+    throw new Error(`${name} must be true or false`);
+  }
+
+  return value === 'true';
 }
 
 function readOptionalPositiveIntegerEnv(

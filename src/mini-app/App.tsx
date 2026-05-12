@@ -46,6 +46,8 @@ import {
   createInitialSellOrderForm,
   isBuyOrderFormReady,
   isSellOrderFormReady,
+  mergeCustomerIntoBuyOrderForm,
+  mergeCustomerIntoSellOrderForm,
   type BuyOrderFormState,
   type SellOrderFormState,
 } from './miniAppOrderForms.js';
@@ -135,8 +137,8 @@ export function App() {
         setActiveOrders(loadedOrders);
         setSelectedOrder(loadedOrders[0] ?? null);
         setProfile(loadedProfile);
-        setBuyForm((form) => mergeCustomerIntoBuyForm(form, loadedProfile.customer));
-        setSellForm((form) => mergeCustomerIntoSellForm(form, loadedProfile.customer));
+        setBuyForm((form) => mergeCustomerIntoBuyOrderForm(form, loadedProfile.customer));
+        setSellForm((form) => mergeCustomerIntoSellOrderForm(form, loadedProfile.customer));
         setLoadingLabel('');
       })
       .catch(() => {
@@ -232,6 +234,8 @@ export function App() {
     setActiveOrders(loadedOrders);
     setSelectedOrder(order);
     setProfile(loadedProfile);
+    setBuyForm((form) => mergeCustomerIntoBuyOrderForm(form, loadedProfile.customer));
+    setSellForm((form) => mergeCustomerIntoSellOrderForm(form, loadedProfile.customer));
   }
 
   async function submitOrder(createOrder: () => Promise<void>) {
@@ -1339,38 +1343,6 @@ function BrandMark() {
       <span />
     </span>
   );
-}
-
-function mergeCustomerIntoBuyForm(
-  form: BuyOrderFormState,
-  customer: UserProfileDto['customer'],
-): BuyOrderFormState {
-  if (!customer) {
-    return form;
-  }
-
-  return {
-    ...form,
-    customerLastName: form.customerLastName || customer.lastName,
-    customerFirstName: form.customerFirstName || customer.firstName,
-    customerMiddleName: form.customerMiddleName || customer.middleName,
-  };
-}
-
-function mergeCustomerIntoSellForm(
-  form: SellOrderFormState,
-  customer: UserProfileDto['customer'],
-): SellOrderFormState {
-  if (!customer) {
-    return form;
-  }
-
-  return {
-    ...form,
-    customerLastName: form.customerLastName || customer.lastName,
-    customerFirstName: form.customerFirstName || customer.firstName,
-    customerMiddleName: form.customerMiddleName || customer.middleName,
-  };
 }
 
 function formatCustomer(customer: MiniAppCustomerInput): string {

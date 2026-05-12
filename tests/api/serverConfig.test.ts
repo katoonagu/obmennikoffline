@@ -250,6 +250,7 @@ describe('loadServerConfig', () => {
       adminApiToken: undefined,
       enableAdminRoutes: false,
       telegramBotToken: undefined,
+      allowMiniAppDevAuth: false,
       port: 3000,
       host: '0.0.0.0',
       rates: {
@@ -258,6 +259,33 @@ describe('loadServerConfig', () => {
       },
       miniAppCorsOrigins: undefined,
     });
+  });
+
+  it('allows explicit Mini App dev-user auth only outside production', () => {
+    expect(
+      loadServerConfig({
+        NODE_ENV: 'development',
+        DATABASE_URL: 'postgresql://user:password@localhost:5432/obmennikoffline',
+        TELEGRAM_BOT_TOKEN: STRONG_TELEGRAM_BOT_TOKEN,
+        MINIAPP_DEV_AUTH_ENABLED: 'true',
+        USDT_RUB_BUY_RATE: '76.850000',
+        USDT_RUB_SELL_RATE: '76.250000',
+      }).allowMiniAppDevAuth,
+    ).toBe(true);
+
+    expect(() =>
+      loadServerConfig({
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgresql://user:password@localhost:5432/obmennikoffline',
+        ADMIN_API_TOKEN: STRONG_ADMIN_TOKEN,
+        ADMIN_ACTOR_IDS: 'manager-1',
+        TELEGRAM_BOT_TOKEN: STRONG_TELEGRAM_BOT_TOKEN,
+        TELEGRAM_INIT_DATA_MAX_AGE_SECONDS: '120',
+        MINIAPP_DEV_AUTH_ENABLED: 'true',
+        USDT_RUB_BUY_RATE: '76.850000',
+        USDT_RUB_SELL_RATE: '76.250000',
+      }),
+    ).toThrow('MINIAPP_DEV_AUTH_ENABLED must not be enabled in production');
   });
 
   it('normalizes explicit Mini App CORS origins before boot', () => {
@@ -313,6 +341,7 @@ describe('loadServerConfig', () => {
       enableAdminRoutes: true,
       telegramBotToken: STRONG_TELEGRAM_BOT_TOKEN,
       telegramInitDataMaxAgeSeconds: 120,
+      allowMiniAppDevAuth: false,
       adminActorIds: ['manager-1', 'manager-2'],
       miniAppCorsOrigins: undefined,
       rates: {

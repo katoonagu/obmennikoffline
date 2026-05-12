@@ -30,10 +30,7 @@ function createDb(
       create: vi.fn(async ({ data }) => createPersistedOrder(data)),
     },
     user: {
-      update: vi.fn(async ({ data }) => ({
-        id: 'user-1',
-        ...data,
-      })),
+      upsert: vi.fn(async ({ create }) => create),
     },
     $transaction: vi.fn(async (fn) => fn(tx)),
   };
@@ -54,10 +51,7 @@ function createTx(input?: {
       updateMany: vi.fn(async () => ({ count: updateCounts.shift() ?? 0 })),
     },
     user: {
-      update: vi.fn(async ({ data }) => ({
-        id: 'user-1',
-        ...data,
-      })),
+      upsert: vi.fn(async ({ create }) => create),
     },
     order: {
       create: vi.fn(async ({ data }) => createPersistedOrder(data)),
@@ -66,7 +60,7 @@ function createTx(input?: {
 }
 
 describe('orderApplicationService', () => {
-  it('atomically persists BUY_USDT orders and updates the user customer profile', async () => {
+  it('atomically persists BUY_USDT orders and upserts the user customer profile', async () => {
     const tx = createTx();
     const db = createDb(tx);
 
@@ -93,11 +87,17 @@ describe('orderApplicationService', () => {
       clientPayoutAddress: PAYOUT_ADDRESS,
     });
 
-    expect(tx.user.update).toHaveBeenCalledWith({
+    expect(tx.user.upsert).toHaveBeenCalledWith({
       where: {
         id: 'user-1',
       },
-      data: {
+      create: {
+        id: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
+      update: {
         customerLastName: 'Alekseev',
         customerFirstName: 'Pavel',
         customerMiddleName: 'Astrakhanov',
@@ -173,11 +173,17 @@ describe('orderApplicationService', () => {
         status: 'awaiting_deposit',
       }),
     });
-    expect(tx.user.update).toHaveBeenCalledWith({
+    expect(tx.user.upsert).toHaveBeenCalledWith({
       where: {
         id: 'user-1',
       },
-      data: {
+      create: {
+        id: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
+      update: {
         customerLastName: 'Alekseev',
         customerFirstName: 'Pavel',
         customerMiddleName: 'Astrakhanov',

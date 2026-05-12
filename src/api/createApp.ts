@@ -91,6 +91,7 @@ export interface CreateApiAppOptions<TOrder> {
   adminSessionSecret?: string;
   telegramBotToken?: string;
   telegramInitDataMaxAgeSeconds?: number;
+  allowMiniAppDevAuth?: boolean;
   corsAllowedOrigins?: readonly string[];
   rateProvider?: UsdtRubRateProvider;
   now?: () => Date;
@@ -417,6 +418,7 @@ export function createApiApp<TOrder>(
       authorization: request.headers.authorization,
       botToken: options.telegramBotToken,
       maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      allowDevUserAuth: options.allowMiniAppDevAuth,
       now: requestNow,
     });
     const query = parseBody(orderListQuerySchema, request.query);
@@ -439,6 +441,7 @@ export function createApiApp<TOrder>(
       authorization: request.headers.authorization,
       botToken: options.telegramBotToken,
       maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      allowDevUserAuth: options.allowMiniAppDevAuth,
       now: requestNow,
     });
     const query = parseBody(orderListQuerySchema, request.query);
@@ -461,6 +464,7 @@ export function createApiApp<TOrder>(
       authorization: request.headers.authorization,
       botToken: options.telegramBotToken,
       maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      allowDevUserAuth: options.allowMiniAppDevAuth,
       now: requestNow,
     });
     const params = parseBody(orderParamsSchema, request.params);
@@ -491,6 +495,7 @@ export function createApiApp<TOrder>(
       authorization: request.headers.authorization,
       botToken: options.telegramBotToken,
       maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      allowDevUserAuth: options.allowMiniAppDevAuth,
       now: requestNow,
     });
     const query = parseBody(userQuerySchema, request.query);
@@ -510,6 +515,7 @@ export function createApiApp<TOrder>(
       authorization: request.headers.authorization,
       botToken: options.telegramBotToken,
       maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      allowDevUserAuth: options.allowMiniAppDevAuth,
       now: requestNow,
     });
     parseBody(emptyQuerySchema, request.query);
@@ -553,6 +559,7 @@ export function createApiApp<TOrder>(
       authorization: request.headers.authorization,
       botToken: options.telegramBotToken,
       maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      allowDevUserAuth: options.allowMiniAppDevAuth,
       now: requestNow,
     });
     parseBody(emptyQuerySchema, request.query);
@@ -889,9 +896,14 @@ function validateTelegramAuthorization(input: {
   authorization: string | undefined;
   botToken: string | undefined;
   maxAgeSeconds: number | undefined;
+  allowDevUserAuth: boolean | undefined;
   now: Date;
 }): ValidatedTelegramInitData | undefined {
   if (!input.botToken) {
+    return undefined;
+  }
+
+  if (input.allowDevUserAuth === true && !input.authorization) {
     return undefined;
   }
 

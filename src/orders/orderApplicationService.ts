@@ -23,11 +23,17 @@ export interface OrderCreateDelegate<TOrder> {
 }
 
 export interface UserCustomerProfileUpdateDelegate {
-  update(input: {
+  upsert(input: {
     where: {
       id: string;
     };
-    data: {
+    create: {
+      id: string;
+      customerLastName: string;
+      customerFirstName: string;
+      customerMiddleName: string;
+    };
+    update: {
       customerLastName: string;
       customerFirstName: string;
       customerMiddleName: string;
@@ -181,15 +187,21 @@ async function updateUserCustomerProfile(
     customerMiddleName: string;
   },
 ): Promise<void> {
-  await user.update({
+  const customerData = {
+    customerLastName: input.customerLastName,
+    customerFirstName: input.customerFirstName,
+    customerMiddleName: input.customerMiddleName,
+  };
+
+  await user.upsert({
     where: {
       id: input.userId,
     },
-    data: {
-      customerLastName: input.customerLastName,
-      customerFirstName: input.customerFirstName,
-      customerMiddleName: input.customerMiddleName,
+    create: {
+      id: input.userId,
+      ...customerData,
     },
+    update: customerData,
   });
 }
 

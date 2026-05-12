@@ -322,6 +322,7 @@ Vite dev server with public browser config:
 
 ```env
 MINIAPP_CORS_ORIGINS="http://127.0.0.1:5173"
+MINIAPP_DEV_AUTH_ENABLED="true"
 VITE_MINIAPP_API_MODE="api"
 VITE_MINIAPP_API_BASE_URL="http://127.0.0.1:3000"
 VITE_MINIAPP_DEV_USER_ID="dev-user-1"
@@ -334,9 +335,10 @@ browser origins only, for example `http://127.0.0.1:5173` for local Vite.
 admin tokens, TRON API keys, seed phrases, or private keys in Vite env vars.
 When Telegram WebApp `initData` is present, the Mini App sends
 `Authorization: tma <initData>`. `VITE_MINIAPP_DEV_USER_ID` is only a local
-fallback for API runs without `TELEGRAM_BOT_TOKEN`; if the API has
-`TELEGRAM_BOT_TOKEN` configured, order/profile routes require signed Telegram
-initData.
+fallback. If the local API has `TELEGRAM_BOT_TOKEN` configured, set
+`MINIAPP_DEV_AUTH_ENABLED="true"` for local smoke tests without Telegram
+WebApp `initData`. Production startup rejects that flag, so production
+order/profile routes require signed Telegram initData.
 
 Build:
 

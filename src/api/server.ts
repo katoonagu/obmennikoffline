@@ -16,6 +16,7 @@ const app = createApiApp({
   adminSessionSecret: config.adminApiToken,
   telegramBotToken: config.telegramBotToken,
   telegramInitDataMaxAgeSeconds: config.telegramInitDataMaxAgeSeconds,
+  allowMiniAppDevAuth: config.allowMiniAppDevAuth,
   corsAllowedOrigins: config.miniAppCorsOrigins,
   rateProvider: createStaticUsdtRubRateProvider(config.rates),
 });

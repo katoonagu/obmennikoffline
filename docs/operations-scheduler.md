@@ -95,6 +95,11 @@ Client order and profile routes use signed Telegram Mini App initData when
 Authorization: tma <initData>
 ```
 
+For local Mini App API smoke tests without Telegram WebApp `initData`, ops may
+temporarily set `MINIAPP_DEV_AUTH_ENABLED=true` on the API process and use a
+public `VITE_MINIAPP_DEV_USER_ID` in the browser. This fallback is for local
+development only; production startup rejects it.
+
 Admin routes use a bearer token and a manager actor header:
 
 ```http

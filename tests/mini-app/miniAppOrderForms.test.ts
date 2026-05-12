@@ -6,6 +6,8 @@ import {
   createInitialSellOrderForm,
   isBuyOrderFormReady,
   isSellOrderFormReady,
+  mergeCustomerIntoBuyOrderForm,
+  mergeCustomerIntoSellOrderForm,
   normalizeDecimalInput,
 } from '../../src/mini-app/miniAppOrderForms.js';
 
@@ -31,6 +33,34 @@ describe('Mini App editable order forms', () => {
       customerLastName: '',
       customerFirstName: '',
       customerMiddleName: '',
+      acceptedTerms: false,
+    });
+  });
+
+  it('prefills refreshed profile FIO only into untouched customer fields', () => {
+    const customer = {
+      lastName: 'Smoke',
+      firstName: 'Api',
+      middleName: 'User',
+    };
+
+    expect(mergeCustomerIntoBuyOrderForm(createInitialBuyOrderForm(), customer)).toEqual({
+      amountRub: '',
+      clientPayoutAddress: '',
+      customerLastName: 'Smoke',
+      customerFirstName: 'Api',
+      customerMiddleName: 'User',
+    });
+
+    expect(mergeCustomerIntoSellOrderForm({
+      ...createInitialSellOrderForm(),
+      amountUsdt: '150',
+      customerFirstName: 'Manual',
+    }, customer)).toEqual({
+      amountUsdt: '150',
+      customerLastName: 'Smoke',
+      customerFirstName: 'Manual',
+      customerMiddleName: 'User',
       acceptedTerms: false,
     });
   });

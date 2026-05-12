@@ -61,6 +61,38 @@ export function createInitialSellOrderForm(
   };
 }
 
+export function mergeCustomerIntoBuyOrderForm(
+  form: BuyOrderFormState,
+  customer: MiniAppCustomerInput | null | undefined,
+): BuyOrderFormState {
+  if (!customer) {
+    return form;
+  }
+
+  return {
+    ...form,
+    customerLastName: form.customerLastName || customer.lastName,
+    customerFirstName: form.customerFirstName || customer.firstName,
+    customerMiddleName: form.customerMiddleName || customer.middleName,
+  };
+}
+
+export function mergeCustomerIntoSellOrderForm(
+  form: SellOrderFormState,
+  customer: MiniAppCustomerInput | null | undefined,
+): SellOrderFormState {
+  if (!customer) {
+    return form;
+  }
+
+  return {
+    ...form,
+    customerLastName: form.customerLastName || customer.lastName,
+    customerFirstName: form.customerFirstName || customer.firstName,
+    customerMiddleName: form.customerMiddleName || customer.middleName,
+  };
+}
+
 export function isBuyOrderFormReady(form: BuyOrderFormState): boolean {
   return buildBuyOrderInput(form).ok;
 }
