@@ -197,6 +197,26 @@ describe('orderReadService', () => {
     ]);
   });
 
+  it('pads database decimals to API DTO scale even when Decimal.toString trims zeros', async () => {
+    const db = createDb({
+      orders: [
+        createOrderRecord({
+          amountUsdt: { toString: () => '5000' },
+          amountRub: { toString: () => '381250' },
+          rateSnapshot: { toString: () => '76.25' },
+        }),
+      ],
+    });
+
+    await expect(listActiveOrders(db, { userId: 'user-1' })).resolves.toMatchObject([
+      {
+        amountUsdt: '5000.000000',
+        amountRub: '381250.00',
+        rateSnapshot: '76.250000',
+      },
+    ]);
+  });
+
   it('serializes recorded crypto payout details without manager audit identity', async () => {
     const completedOrder = {
       ...createOrderRecord({

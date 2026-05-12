@@ -341,9 +341,9 @@ function toOrderDto(order: ReadableOrderRecord): OrderDto {
       firstName: order.customerFirstName,
       middleName: order.customerMiddleName,
     },
-    amountUsdt: toNullableDecimalString(order.amountUsdt),
-    amountRub: toNullableDecimalString(order.amountRub),
-    rateSnapshot: toRequiredDecimalString(order.rateSnapshot, 'rateSnapshot'),
+    amountUsdt: toNullableDecimalString(order.amountUsdt, 6, 'amountUsdt'),
+    amountRub: toNullableDecimalString(order.amountRub, 2, 'amountRub'),
+    rateSnapshot: toRequiredDecimalString(order.rateSnapshot, 6, 'rateSnapshot'),
     rateExpiresAt: order.rateExpiresAt.toISOString(),
     orderExpiresAt: order.orderExpiresAt.toISOString(),
     status: order.status,
@@ -373,16 +373,45 @@ function toCryptoPayoutDto(
   };
 }
 
-function toNullableDecimalString(value: unknown | null): string | null {
-  return value === null || value === undefined ? null : String(value);
+function toNullableDecimalString(
+  value: unknown | null,
+  scale: number,
+  fieldName: string,
+): string | null {
+  return value === null || value === undefined
+    ? null
+    : toFixedScaleDecimalString(value, scale, fieldName);
 }
 
-function toRequiredDecimalString(value: unknown, fieldName: string): string {
+function toRequiredDecimalString(
+  value: unknown,
+  scale: number,
+  fieldName: string,
+): string {
   if (value === null || value === undefined) {
     throw new Error(`${fieldName} is required`);
   }
 
-  return String(value);
+  return toFixedScaleDecimalString(value, scale, fieldName);
+}
+
+function toFixedScaleDecimalString(
+  value: unknown,
+  scale: number,
+  fieldName: string,
+): string {
+  const decimal = String(value);
+  const [integerPart, fractionalPart = ''] = decimal.split('.');
+
+  if (
+    !/^\d+$/.test(integerPart) ||
+    !/^\d*$/.test(fractionalPart) ||
+    fractionalPart.length > scale
+  ) {
+    throw new Error(`${fieldName} must fit Decimal(36, ${scale})`);
+  }
+
+  return `${integerPart}.${fractionalPart.padEnd(scale, '0')}`;
 }
 
 function normalizeLimit(value: number | undefined): number {
