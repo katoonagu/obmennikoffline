@@ -28,6 +28,12 @@ describe('parseExpireOrdersCliEnv', () => {
         ORDER_EXPIRATION_LIMIT: '0',
       }),
     ).toThrow('ORDER_EXPIRATION_LIMIT must be a positive safe integer');
+
+    expect(() =>
+      parseExpireOrdersCliEnv({
+        ORDER_EXPIRATION_LIMIT: '1e2',
+      }),
+    ).toThrow('ORDER_EXPIRATION_LIMIT must be a positive safe integer');
   });
 });
 

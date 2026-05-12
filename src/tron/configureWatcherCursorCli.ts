@@ -9,6 +9,7 @@ import {
 import { toJsonSafe } from './watchDepositsOnceCli.js';
 
 export interface ConfigureWatcherCursorCliEnv {
+  NODE_ENV?: string;
   TRON_WATCHER_CURSOR_ID?: string;
   TRON_WATCHER_LAST_PROCESSED_BLOCK?: string;
   TRON_WATCHER_CONFIRMATION_DEPTH?: string;
@@ -24,6 +25,7 @@ export interface ConfigureWatcherCursorCliConfig {
 
 export interface RunConfigureWatcherCursorCliInput {
   env: ConfigureWatcherCursorCliEnv;
+  argv?: string[];
   db: UsdtDepositWatcherCursorProvisioningDb;
   configureCursor?: (
     input: ConfigureUsdtDepositWatcherCursorInput,
@@ -53,6 +55,12 @@ export function parseConfigureWatcherCursorCliEnv(
       'TRON_WATCHER_MAX_BLOCK_RANGE',
     ) ?? DEFAULT_MAX_BLOCK_RANGE;
 
+  if (trimOptional(env.NODE_ENV) === 'production' && confirmationDepth <= 0) {
+    throw new Error(
+      'TRON_WATCHER_CONFIRMATION_DEPTH must be greater than zero in production',
+    );
+  }
+
   return {
     ...(cursorId ? { cursorId } : {}),
     lastProcessedBlock,
@@ -64,7 +72,10 @@ export function parseConfigureWatcherCursorCliEnv(
 export async function runConfigureWatcherCursorCli(
   input: RunConfigureWatcherCursorCliInput,
 ): Promise<number> {
-  const config = parseConfigureWatcherCursorCliEnv(input.env);
+  const config = parseConfigureWatcherCursorCliEnv({
+    ...input.env,
+    ...parseConfigureWatcherCursorCliArgs(input.argv ?? []),
+  });
   const configureCursor =
     input.configureCursor ?? configureUsdtDepositWatcherCursorInDb;
   const cursor = await configureCursor({
@@ -79,6 +90,36 @@ export async function runConfigureWatcherCursorCli(
   writeOutput(JSON.stringify(toJsonSafe(cursor), null, 2));
 
   return 0;
+}
+
+function parseConfigureWatcherCursorCliArgs(
+  argv: string[],
+): Partial<ConfigureWatcherCursorCliEnv> {
+  const parsed: Partial<ConfigureWatcherCursorCliEnv> = {};
+  const optionMap: Record<string, keyof ConfigureWatcherCursorCliEnv> = {
+    '--cursor-id': 'TRON_WATCHER_CURSOR_ID',
+    '--last-processed-block': 'TRON_WATCHER_LAST_PROCESSED_BLOCK',
+    '--confirmation-depth': 'TRON_WATCHER_CONFIRMATION_DEPTH',
+    '--max-block-range': 'TRON_WATCHER_MAX_BLOCK_RANGE',
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const option = argv[index];
+    const envName = optionMap[option];
+    if (!envName) {
+      throw new Error(`unexpected argument: ${option}`);
+    }
+
+    const value = argv[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Error(`missing value for ${option}`);
+    }
+
+    parsed[envName] = value;
+    index += 1;
+  }
+
+  return parsed;
 }
 
 function parseRequiredNonNegativeBigInt(
@@ -105,6 +146,10 @@ function parseOptionalNonNegativeInteger(
     return undefined;
   }
 
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${fieldName} must be a non-negative safe integer`);
+  }
+
   const parsed = Number(trimmed);
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
     throw new Error(`${fieldName} must be a non-negative safe integer`);
@@ -120,6 +165,10 @@ function parseOptionalPositiveInteger(
   const trimmed = trimOptional(value);
   if (!trimmed) {
     return undefined;
+  }
+
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
   }
 
   const parsed = Number(trimmed);
@@ -150,6 +199,7 @@ if (isDirectRun(process.argv[1], import.meta.url)) {
     try {
       const exitCode = await runConfigureWatcherCursorCli({
         env: process.env,
+        argv: process.argv.slice(2),
         db: prisma as unknown as UsdtDepositWatcherCursorProvisioningDb,
       });
       process.exitCode = exitCode;

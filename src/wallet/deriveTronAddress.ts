@@ -1,3 +1,4 @@
+import { validateMnemonic } from 'bip39';
 import { HDNodeWallet } from 'ethers';
 import { utils as tronUtils } from 'tronweb';
 
@@ -21,6 +22,11 @@ export function tronDerivationPath(index: number): string {
 
 export function deriveTronAddress(input: DeriveTronAddressInput): DerivedTronAddress {
   const derivationPath = tronDerivationPath(input.index);
+
+  if (!validateMnemonic(input.mnemonic)) {
+    throw new Error('TRON_MNEMONIC must be a valid BIP39 mnemonic');
+  }
+
   const wallet = HDNodeWallet.fromPhrase(input.mnemonic, undefined, derivationPath);
   const privateKey = wallet.privateKey.startsWith('0x')
     ? wallet.privateKey.slice(2)

@@ -1,4 +1,4 @@
-import type { DepositAddressStatus } from '../domain/types.js';
+import type { DepositAddressStatus, OrderStatus } from '../domain/types.js';
 import {
   ingestUsdtDepositInDb,
   type DepositIngestionDb,
@@ -14,7 +14,7 @@ export interface DepositWatcherDb extends DepositIngestionDb {
         network: 'TRON';
         asset: 'USDT';
         status: {
-          in: Array<Extract<DepositAddressStatus, 'reserved' | 'expired'>>;
+          in: DepositWatcherAddressStatus[];
         };
         derivationIndex?: {
           gt: number;
@@ -22,7 +22,7 @@ export interface DepositWatcherDb extends DepositIngestionDb {
         order: {
           is: {
             status: {
-              in: Array<'awaiting_deposit' | 'expired'>;
+              in: DepositWatcherOrderStatus[];
             };
           };
         };
@@ -62,6 +62,22 @@ export interface RunUsdtDepositWatcherResult {
 }
 
 const DEFAULT_BATCH_SIZE = 100;
+const WATCHED_DEPOSIT_ADDRESS_STATUSES = [
+  'reserved',
+  'expired',
+  'funded',
+  'late_funded',
+] as const satisfies readonly DepositAddressStatus[];
+const WATCHED_ORDER_STATUSES = [
+  'awaiting_deposit',
+  'expired',
+  'manager_review',
+  'late_payment',
+] as const satisfies readonly OrderStatus[];
+
+type DepositWatcherAddressStatus =
+  (typeof WATCHED_DEPOSIT_ADDRESS_STATUSES)[number];
+type DepositWatcherOrderStatus = (typeof WATCHED_ORDER_STATUSES)[number];
 
 export async function runUsdtDepositWatcher(
   input: RunUsdtDepositWatcherInput,
@@ -81,7 +97,7 @@ export async function runUsdtDepositWatcher(
         network: 'TRON',
         asset: 'USDT',
         status: {
-          in: ['reserved', 'expired'],
+          in: [...WATCHED_DEPOSIT_ADDRESS_STATUSES],
         },
         ...(lastDerivationIndex === undefined
           ? {}
@@ -93,7 +109,7 @@ export async function runUsdtDepositWatcher(
         order: {
           is: {
             status: {
-              in: ['awaiting_deposit', 'expired'],
+              in: [...WATCHED_ORDER_STATUSES],
             },
           },
         },

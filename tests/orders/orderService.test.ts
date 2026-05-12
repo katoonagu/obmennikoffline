@@ -1,11 +1,43 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { createBuyUsdtOrder, createSellUsdtOrder } from '../../src/orders/orderService.js';
 
 describe('orderService', () => {
+  it('stores office customer FIO on new orders', () => {
+    const order = createSellUsdtOrder({
+      publicId: 'E74737',
+      userId: 'user-1',
+      customerLastName: 'Alekseev',
+      customerFirstName: 'Pavel',
+      customerMiddleName: 'Astrakhanov',
+      amountUsdt: '5000.000000',
+      amountRub: '381250.00',
+      rateSnapshot: '76.250000',
+      now: new Date('2026-05-11T09:00:00.000Z'),
+      rateTtlMinutes: 20,
+      orderTtlMinutes: 60,
+      depositAddressId: 'addr-1',
+    });
+
+    expect(order.customerLastName).toBe('Alekseev');
+    expect(order.customerFirstName).toBe('Pavel');
+    expect(order.customerMiddleName).toBe('Astrakhanov');
+  });
+
+  it('rejects orders without complete office customer FIO', () => {
+    expect(() =>
+      createOrderForTest('BUY_USDT', {
+        customerMiddleName: '   ',
+      }),
+    ).toThrow('customerMiddleName is required');
+  });
+
   it('creates SELL_USDT orders with awaiting_deposit status and a reserved address requirement', () => {
     const order = createSellUsdtOrder({
       publicId: 'E74737',
       userId: 'user-1',
+      customerLastName: 'Alekseev',
+      customerFirstName: 'Pavel',
+      customerMiddleName: 'Astrakhanov',
       amountUsdt: '5000.000000',
       amountRub: '381250.00',
       rateSnapshot: '76.250000',
@@ -30,6 +62,9 @@ describe('orderService', () => {
     const order = createBuyUsdtOrder({
       publicId: 'E97010',
       userId: 'user-1',
+      customerLastName: 'Alekseev',
+      customerFirstName: 'Pavel',
+      customerMiddleName: 'Astrakhanov',
       amountUsdt: '2602.400000',
       amountRub: '200000.00',
       rateSnapshot: '76.850000',
@@ -55,6 +90,9 @@ describe('orderService', () => {
       createBuyUsdtOrder({
         publicId: 'E97010',
         userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
         amountUsdt: '2602.400000',
         amountRub: '200000.00',
         rateSnapshot: '76.850000',
@@ -71,6 +109,9 @@ describe('orderService', () => {
       createSellUsdtOrder({
         publicId: 'E74737',
         userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
         amountUsdt: '5000.000000',
         amountRub: '381250.00',
         rateSnapshot: '76.250000',
@@ -169,6 +210,9 @@ describe('orderService', () => {
     const baseInput = {
       publicId: 'E97010',
       userId: 'user-1',
+      customerLastName: 'Alekseev',
+      customerFirstName: 'Pavel',
+      customerMiddleName: 'Astrakhanov',
       amountUsdt: '2602.400000',
       amountRub: '200000.00',
       rateSnapshot: '76.850000',
@@ -211,6 +255,9 @@ function createOrderForTest(direction: TestOrderDirection, overrides: Record<str
     return createSellUsdtOrder({
       publicId: 'E74737',
       userId: 'user-1',
+      customerLastName: 'Alekseev',
+      customerFirstName: 'Pavel',
+      customerMiddleName: 'Astrakhanov',
       amountUsdt: '5000.000000',
       amountRub: '381250.00',
       rateSnapshot: '76.250000',
@@ -225,6 +272,9 @@ function createOrderForTest(direction: TestOrderDirection, overrides: Record<str
   return createBuyUsdtOrder({
     publicId: 'E97010',
     userId: 'user-1',
+    customerLastName: 'Alekseev',
+    customerFirstName: 'Pavel',
+    customerMiddleName: 'Astrakhanov',
     amountUsdt: '2602.400000',
     amountRub: '200000.00',
     rateSnapshot: '76.850000',

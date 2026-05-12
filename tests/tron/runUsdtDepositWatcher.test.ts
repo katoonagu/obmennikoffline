@@ -121,7 +121,7 @@ function createProvider(events: TronTransferEvent[]): TronProvider {
 }
 
 describe('runUsdtDepositWatcher', () => {
-  it('fetches open and expired deposit addresses so late deposits are not missed', async () => {
+  it('fetches deposit addresses that can still receive relevant client transfers', async () => {
     const db = createDb({});
     const provider = createProvider([createEvent()]);
 
@@ -151,12 +151,12 @@ describe('runUsdtDepositWatcher', () => {
         network: 'TRON',
         asset: 'USDT',
         status: {
-          in: ['reserved', 'expired'],
+          in: ['reserved', 'expired', 'funded', 'late_funded'],
         },
         order: {
           is: {
             status: {
-              in: ['awaiting_deposit', 'expired'],
+              in: ['awaiting_deposit', 'expired', 'manager_review', 'late_payment'],
             },
           },
         },

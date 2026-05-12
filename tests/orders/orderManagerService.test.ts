@@ -190,6 +190,36 @@ describe('orderManagerService', () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
+  it('rejects unsafe audit comments before opening a transaction', async () => {
+    const payoutTx = createTx(createOrder());
+    const payoutDb = createDb(payoutTx);
+
+    await expect(
+      recordManualCryptoPayoutInDb(payoutDb, {
+        publicId: 'E97010',
+        actorId: 'manager-1',
+        txId: TX_ID,
+        comment: 'x'.repeat(501),
+        now: NOW,
+      }),
+    ).rejects.toThrow('comment must be at most 500 characters');
+    expect(payoutDb.$transaction).not.toHaveBeenCalled();
+
+    const statusTx = createTx(createOrder());
+    const statusDb = createDb(statusTx);
+
+    await expect(
+      setManagerOrderStatusInDb(statusDb, {
+        publicId: 'E97010',
+        actorId: 'manager-1',
+        status: 'cancelled',
+        comment: '   ',
+        now: NOW,
+      }),
+    ).rejects.toThrow('comment is required');
+    expect(statusDb.$transaction).not.toHaveBeenCalled();
+  });
+
   it('sets manager-controlled order statuses and writes audit log records', async () => {
     const tx = createTx(
       createOrder({

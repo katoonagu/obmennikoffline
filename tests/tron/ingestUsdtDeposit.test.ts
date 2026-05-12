@@ -8,6 +8,8 @@ import {
 import type { NormalizedBlockchainTransaction } from '../../src/tron/normalizeUsdtTransfer.js';
 
 const TX_ID = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const SECOND_TX_ID =
+  'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
 const FROM_ADDRESS = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
 const DEPOSIT_ADDRESS = 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY';
 const BLOCK_TIMESTAMP = new Date('2026-05-11T09:05:00.000Z');
@@ -288,9 +290,10 @@ describe('ingestUsdtDepositInDb', () => {
     expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
-  it('rejects non-awaiting orders before recording the transaction', async () => {
+  it('records follow-up transfers for SELL orders already in manager review', async () => {
     const tx = createTx(
       createWatchedAddress({
+        status: 'funded',
         order: {
           id: 'order-db-1',
           publicId: 'E74737',
@@ -303,22 +306,53 @@ describe('ingestUsdtDepositInDb', () => {
     const db = createDb(tx);
 
     await expect(
-      ingestUsdtDepositInDb(db, { transfer: createTransfer() }),
-    ).resolves.toEqual({
-      status: 'ignored_ineligible_order',
+      ingestUsdtDepositInDb(db, {
+        transfer: createTransfer({
+          txId: SECOND_TX_ID,
+          logIndex: 1,
+          amount: '1.000000',
+        }),
+      }),
+    ).resolves.toMatchObject({
+      status: 'processed',
       orderPublicId: 'E74737',
-      currentStatus: 'manager_review',
+      nextOrderStatus: 'manager_review',
+      depositAddressStatus: 'funded',
     });
 
-    expect(tx.blockchainTransaction.create).not.toHaveBeenCalled();
-    expect(tx.order.updateMany).not.toHaveBeenCalled();
-    expect(tx.auditLog.create).not.toHaveBeenCalled();
+    expect(tx.blockchainTransaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        txId: SECOND_TX_ID,
+        logIndex: 1,
+        amount: '1.000000',
+        orderId: 'order-db-1',
+      }),
+    });
+    expect(tx.order.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'order-db-1',
+        status: 'manager_review',
+      },
+      data: {
+        status: 'manager_review',
+      },
+    });
+    expect(tx.depositAddress.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'addr-1',
+        status: 'funded',
+      },
+      data: {
+        status: 'funded',
+        fundedAt: BLOCK_TIMESTAMP,
+      },
+    });
   });
 
   it('rejects non-reserved addresses before recording the transaction', async () => {
     const tx = createTx(
       createWatchedAddress({
-        status: 'funded',
+        status: 'available',
       }),
     );
     const db = createDb(tx);
@@ -328,7 +362,7 @@ describe('ingestUsdtDepositInDb', () => {
     ).resolves.toEqual({
       status: 'ignored_ineligible_address',
       toAddress: DEPOSIT_ADDRESS,
-      currentStatus: 'funded',
+      currentStatus: 'available',
     });
 
     expect(tx.blockchainTransaction.create).not.toHaveBeenCalled();

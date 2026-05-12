@@ -153,9 +153,14 @@ function parseRequiredSafeInteger(
     throw new Error(`${flagName} is required`);
   }
 
-  const parsed = Number(value);
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${flagName} must be a safe non-negative integer`);
+  }
 
-  if (!Number.isSafeInteger(parsed) || parsed < 0 || value.trim() === '') {
+  const parsed = Number(trimmed);
+
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
     throw new Error(`${flagName} must be a safe non-negative integer`);
   }
 

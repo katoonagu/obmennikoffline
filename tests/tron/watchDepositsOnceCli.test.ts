@@ -108,6 +108,12 @@ describe('parseTronWatcherCliEnv', () => {
         TRON_WATCHER_ADDRESS_BATCH_SIZE: '0',
       }),
     ).toThrow('TRON_WATCHER_ADDRESS_BATCH_SIZE must be a positive safe integer');
+
+    expect(() =>
+      parseTronWatcherCliEnv({
+        TRON_WATCHER_ADDRESS_BATCH_SIZE: '1e2',
+      }),
+    ).toThrow('TRON_WATCHER_ADDRESS_BATCH_SIZE must be a positive safe integer');
   });
 });
 

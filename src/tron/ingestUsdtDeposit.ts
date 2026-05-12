@@ -270,14 +270,24 @@ export async function ingestUsdtDepositInDb(
 
 function isDepositAddressOpenForIngestion(
   status: DepositAddressStatus,
-): status is 'reserved' | 'expired' {
-  return status === 'reserved' || status === 'expired';
+): status is 'reserved' | 'expired' | 'funded' | 'late_funded' {
+  return (
+    status === 'reserved' ||
+    status === 'expired' ||
+    status === 'funded' ||
+    status === 'late_funded'
+  );
 }
 
 function isOrderOpenForDepositIngestion(
   status: OrderStatus,
-): status is 'awaiting_deposit' | 'expired' {
-  return status === 'awaiting_deposit' || status === 'expired';
+): status is 'awaiting_deposit' | 'expired' | 'manager_review' | 'late_payment' {
+  return (
+    status === 'awaiting_deposit' ||
+    status === 'expired' ||
+    status === 'manager_review' ||
+    status === 'late_payment'
+  );
 }
 
 function decideNextOrderStatus(input: {
@@ -285,6 +295,14 @@ function decideNextOrderStatus(input: {
   order: WatchedOrderRecord;
   expectedAmountUsdt: string | null;
 }): OrderStatus {
+  if (input.order.status === 'manager_review') {
+    return 'manager_review';
+  }
+
+  if (input.order.status === 'late_payment') {
+    return 'late_payment';
+  }
+
   if (input.expectedAmountUsdt !== input.transfer.amount) {
     return 'manager_review';
   }

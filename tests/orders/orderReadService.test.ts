@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ACTIVE_ORDER_STATUSES,
   HISTORY_ORDER_STATUSES,
+  getAnyOrderByPublicId,
   getOrderByPublicId,
   getUserProfile,
   listAllActiveOrders,
@@ -15,6 +16,8 @@ const CREATED_AT = new Date('2026-05-11T09:00:00.000Z');
 const UPDATED_AT = new Date('2026-05-11T09:05:00.000Z');
 const RATE_EXPIRES_AT = new Date('2026-05-11T09:20:00.000Z');
 const ORDER_EXPIRES_AT = new Date('2026-05-11T10:00:00.000Z');
+const PAYOUT_TX_ID =
+  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 function createOrderRecord(
   overrides: Partial<ReadableOrderRecord> = {},
@@ -24,6 +27,9 @@ function createOrderRecord(
     direction: 'SELL_USDT',
     asset: 'USDT',
     network: 'TRON',
+    customerLastName: 'Alekseev',
+    customerFirstName: 'Pavel',
+    customerMiddleName: 'Astrakhanov',
     amountUsdt: { toString: () => '5000.000000' },
     amountRub: { toString: () => '381250.00' },
     rateSnapshot: { toString: () => '76.250000' },
@@ -34,6 +40,8 @@ function createOrderRecord(
       address: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
     },
     clientPayoutAddress: null,
+    payoutTxId: null,
+    payoutTxRecordedAt: null,
     createdAt: CREATED_AT,
     updatedAt: UPDATED_AT,
     completedAt: null,
@@ -77,6 +85,11 @@ describe('orderReadService', () => {
         direction: 'SELL_USDT',
         asset: 'USDT',
         network: 'TRON',
+        customer: {
+          lastName: 'Alekseev',
+          firstName: 'Pavel',
+          middleName: 'Astrakhanov',
+        },
         amountUsdt: '5000.000000',
         amountRub: '381250.00',
         rateSnapshot: '76.250000',
@@ -85,6 +98,7 @@ describe('orderReadService', () => {
         status: 'awaiting_deposit',
         depositAddress: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
         clientPayoutAddress: null,
+        cryptoPayout: null,
         createdAt: '2026-05-11T09:00:00.000Z',
         updatedAt: '2026-05-11T09:05:00.000Z',
         completedAt: null,
@@ -183,6 +197,38 @@ describe('orderReadService', () => {
     ]);
   });
 
+  it('serializes recorded crypto payout details without manager audit identity', async () => {
+    const completedOrder = {
+      ...createOrderRecord({
+        direction: 'BUY_USDT',
+        status: 'completed',
+        depositAddress: null,
+        clientPayoutAddress: 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7',
+        completedAt: new Date('2026-05-11T09:10:00.000Z'),
+      }),
+      payoutTxId: PAYOUT_TX_ID,
+      payoutTxRecordedAt: UPDATED_AT,
+      payoutTxRecordedBy: 'manager-1',
+    };
+    const db = createDb({
+      order: completedOrder,
+    });
+
+    await expect(
+      getOrderByPublicId(db, {
+        userId: 'user-1',
+        publicId: 'E74737',
+      }),
+    ).resolves.toMatchObject({
+      publicId: 'E74737',
+      status: 'completed',
+      cryptoPayout: {
+        txId: PAYOUT_TX_ID,
+        recordedAt: '2026-05-11T09:05:00.000Z',
+      },
+    });
+  });
+
   it('loads order details only when public id belongs to the requested user', async () => {
     const db = createDb({
       order: createOrderRecord({
@@ -227,6 +273,31 @@ describe('orderReadService', () => {
         publicId: 'E40400',
       }),
     ).resolves.toBeNull();
+  });
+
+  it('loads order details for managers without a user filter', async () => {
+    const db = createDb({
+      order: createOrderRecord({
+        publicId: 'E74737',
+      }),
+    });
+
+    await expect(
+      getAnyOrderByPublicId(db, {
+        publicId: 'E74737',
+      }),
+    ).resolves.toMatchObject({
+      publicId: 'E74737',
+      status: 'awaiting_deposit',
+    });
+
+    expect(db.order.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          publicId: 'E74737',
+        },
+      }),
+    );
   });
 
   it('loads profile details and user order counters', async () => {

@@ -4,6 +4,9 @@ import type { Asset, Network, OrderDirection, OrderStatus } from '../domain/type
 interface BaseOrderInput {
   publicId: string;
   userId: string;
+  customerLastName: string;
+  customerFirstName: string;
+  customerMiddleName: string;
   amountUsdt: string;
   amountRub: string;
   rateSnapshot: string;
@@ -18,6 +21,9 @@ export interface CreatedOrder {
   direction: OrderDirection;
   asset: Asset;
   network: Network;
+  customerLastName: string;
+  customerFirstName: string;
+  customerMiddleName: string;
   amountUsdt: string;
   amountRub: string;
   rateSnapshot: string;
@@ -40,6 +46,7 @@ export function createSellUsdtOrder(input: CreateSellUsdtOrderInput): CreatedOrd
   assertBaseOrderInput(input);
   assertPositiveTtl(input.rateTtlMinutes, 'rateTtlMinutes', input.now);
   assertPositiveTtl(input.orderTtlMinutes, 'orderTtlMinutes', input.now);
+  const customer = normalizeCustomer(input);
 
   assertRequiredString(
     input.depositAddressId,
@@ -53,6 +60,9 @@ export function createSellUsdtOrder(input: CreateSellUsdtOrderInput): CreatedOrd
     direction: 'SELL_USDT',
     asset: 'USDT',
     network: 'TRON',
+    customerLastName: customer.lastName,
+    customerFirstName: customer.firstName,
+    customerMiddleName: customer.middleName,
     amountUsdt: input.amountUsdt,
     amountRub: input.amountRub,
     rateSnapshot: input.rateSnapshot,
@@ -69,6 +79,7 @@ export function createBuyUsdtOrder(input: CreateBuyUsdtOrderInput): CreatedOrder
   assertPositiveTtl(input.rateTtlMinutes, 'rateTtlMinutes', input.now);
   assertPositiveTtl(input.orderTtlMinutes, 'orderTtlMinutes', input.now);
   assertTronAddress(input.clientPayoutAddress, 'clientPayoutAddress');
+  const customer = normalizeCustomer(input);
 
   return {
     publicId: input.publicId,
@@ -76,6 +87,9 @@ export function createBuyUsdtOrder(input: CreateBuyUsdtOrderInput): CreatedOrder
     direction: 'BUY_USDT',
     asset: 'USDT',
     network: 'TRON',
+    customerLastName: customer.lastName,
+    customerFirstName: customer.firstName,
+    customerMiddleName: customer.middleName,
     amountUsdt: input.amountUsdt,
     amountRub: input.amountRub,
     rateSnapshot: input.rateSnapshot,
@@ -94,10 +108,25 @@ function addMinutes(date: Date, minutes: number): Date {
 function assertBaseOrderInput(input: BaseOrderInput): void {
   assertRequiredString(input.publicId, 'publicId');
   assertRequiredString(input.userId, 'userId');
+  assertRequiredString(input.customerLastName, 'customerLastName');
+  assertRequiredString(input.customerFirstName, 'customerFirstName');
+  assertRequiredString(input.customerMiddleName, 'customerMiddleName');
   assertPositiveDecimalString(input.amountUsdt, 'amountUsdt', 6);
   assertPositiveDecimalString(input.amountRub, 'amountRub', 2);
   assertPositiveDecimalString(input.rateSnapshot, 'rateSnapshot', 6);
   assertValidDate(input.now, 'now');
+}
+
+function normalizeCustomer(input: BaseOrderInput): {
+  lastName: string;
+  firstName: string;
+  middleName: string;
+} {
+  return {
+    lastName: input.customerLastName.trim(),
+    firstName: input.customerFirstName.trim(),
+    middleName: input.customerMiddleName.trim(),
+  };
 }
 
 function assertRequiredString(value: unknown, fieldName: string, message = `${fieldName} is required`): void {

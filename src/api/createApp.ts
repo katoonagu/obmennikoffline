@@ -1,6 +1,15 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { z, ZodError } from 'zod';
+import { ZodError, type ZodType } from 'zod';
+import {
+  authenticateAdminInDb,
+  requireActiveAdminSessionInDb,
+  type AdminAuthDb,
+} from '../admin/adminAuthService.js';
+import {
+  isStrongAdminSessionSecret,
+  verifyAdminSession,
+} from '../admin/adminSession.js';
 import {
   importAddressPoolToDb,
   type AddressPoolImportDb,
@@ -16,6 +25,7 @@ import {
   type OrderManagerDb,
 } from '../orders/orderManagerService.js';
 import {
+  getAnyOrderByPublicId,
   getOrderByPublicId,
   getUserProfile,
   listAllActiveOrders,
@@ -24,14 +34,50 @@ import {
   type OrderReadDb,
 } from '../orders/orderReadService.js';
 import {
+  type ValidatedTelegramInitData,
   validateTelegramInitData,
 } from '../telegram/validateInitData.js';
 import {
   resolveTelegramUserInDb,
   type TelegramUserDb,
 } from '../users/telegramUserService.js';
+import {
+  createUsdtRubOrderQuote,
+  normalizeUsdtRubRates,
+  type UsdtRubRateProvider,
+} from '../rates/rateQuoteService.js';
+import {
+  isValidAdminActorId,
+  readAdminActorIdHeader,
+} from './adminActorId.js';
+import {
+  addressPoolImportResponseSchema,
+  adminSessionResponseSchema,
+  orderResponseSchema,
+  ordersResponseSchema,
+  profileResponseSchema,
+  ratesResponseSchema,
+  telegramInitDataValidationResponseSchema,
+  validateApiResponse,
+} from './responseSchemas.js';
+import {
+  addressPoolImportBodySchema,
+  adminOrderListQuerySchema,
+  adminSessionBodySchema,
+  buyOrderBodySchema,
+  emptyQuerySchema,
+  healthResponseSchema,
+  managerStatusBodySchema,
+  manualCryptoPayoutBodySchema,
+  orderListQuerySchema,
+  orderParamsSchema,
+  sellOrderBodySchema,
+  telegramInitDataBodySchema,
+  userQuerySchema,
+} from './routeContracts.js';
 
 export type ApiDb<TOrder> = AddressPoolImportDb &
+  AdminAuthDb &
   OrderApplicationDb<TOrder> &
   OrderManagerDb<TOrder> &
   OrderReadDb &
@@ -41,81 +87,24 @@ export interface CreateApiAppOptions<TOrder> {
   db: ApiDb<TOrder>;
   enableAdminRoutes?: boolean;
   adminApiToken?: string;
+  adminActorIds?: readonly string[];
+  adminSessionSecret?: string;
   telegramBotToken?: string;
   telegramInitDataMaxAgeSeconds?: number;
+  rateProvider?: UsdtRubRateProvider;
   now?: () => Date;
   publicIdFactory?: () => string;
 }
 
 const DEFAULT_RATE_TTL_MINUTES = 20;
 const DEFAULT_ORDER_TTL_MINUTES = 60;
-
-const addressPoolRowSchema = z.object({
-  network: z.literal('TRON'),
-  asset: z.literal('USDT'),
-  derivationIndex: z.number().int().nonnegative(),
-  address: z.string(),
-});
-
-const addressPoolImportBodySchema = z.object({
-  rows: z.array(addressPoolRowSchema),
-});
-
-const baseOrderBodySchema = z.object({
-  userId: z.string().optional(),
-  amountUsdt: z.string(),
-  amountRub: z.string(),
-  rateSnapshot: z.string(),
-  rateTtlMinutes: z.number().int().positive().optional(),
-  orderTtlMinutes: z.number().int().positive().optional(),
-});
-
-const buyOrderBodySchema = baseOrderBodySchema.extend({
-  clientPayoutAddress: z.string(),
-});
-
-const sellOrderBodySchema = baseOrderBodySchema;
-
-const telegramInitDataBodySchema = z.object({
-  initData: z.string().min(1),
-});
-
-const userQuerySchema = z.object({
-  userId: z.string().optional(),
-});
-
-const orderListQuerySchema = userQuerySchema.extend({
-  limit: z.coerce.number().int().positive().max(100).optional(),
-});
-
-const orderParamsSchema = z.object({
-  publicId: z.string().min(1),
-});
-
-const managerStatusBodySchema = z.object({
-  actorId: z.string().min(1),
-  status: z.enum([
-    'pending_aml',
-    'manager_review',
-    'ready_for_cash_payout',
-    'ready_for_crypto_payout',
-    'completed',
-    'cancelled',
-    'expired',
-    'rejected',
-  ]),
-  comment: z.string().optional(),
-});
-
-const manualCryptoPayoutBodySchema = z.object({
-  actorId: z.string().min(1),
-  txId: z.string().min(1),
-  comment: z.string().optional(),
-});
+const ADMIN_LOGIN_MAX_FAILED_ATTEMPTS = 5;
+const ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 
 const DOMAIN_VALIDATION_PATTERNS = [
   /^(actorId|publicId|txId|userId) is required$/,
   /^limit must be a positive integer up to 100$/,
+  /^rateProvider is required to create orders$/,
   /^depositAddressId is required for SELL_USDT order$/,
   /^clientPayoutAddress is required for manual crypto payout$/,
   /^(clientPayoutAddress|address) must be a valid TRON base58 address$/,
@@ -125,8 +114,12 @@ const DOMAIN_VALIDATION_PATTERNS = [
   /^order is not open for manual crypto payout$/,
   /^order is no longer open for manual crypto payout$/,
   /^BUY_USDT completion requires manual crypto payout tx id$/,
-  /^(amountUsdt|amountRub|rateSnapshot) must be a positive decimal string$/,
-  /^(amountUsdt|amountRub|rateSnapshot) must fit Decimal\(36, (2|6)\)$/,
+  /^amountRub is required for BUY_USDT quote$/,
+  /^amountUsdt is required for SELL_USDT quote$/,
+  /^customer(LastName|FirstName|MiddleName) is required$/,
+  /^comment (is required|must be at most 500 characters)$/,
+  /^(amountUsdt|amountRub|rateSnapshot|buyRate|sellRate) must be a positive decimal string$/,
+  /^(amountUsdt|amountRub|rateSnapshot|buyRate|sellRate) must fit Decimal\(36, (2|6)\)$/,
   /^(rateTtlMinutes|orderTtlMinutes|maxReservationAttempts|ttlMinutes) must be a positive integer$/,
   /^now must be a valid Date$/,
   /^(rateTtlMinutes|orderTtlMinutes|ttlMinutes) produces an invalid expiry date$/,
@@ -155,6 +148,12 @@ const ADMIN_AUTH_ERROR_MESSAGES = new Set([
   'admin authorization is required',
   'admin authorization must use Bearer scheme',
   'admin authorization token is invalid',
+  'admin actor id is required',
+  'admin actor id is invalid',
+  'admin actor id is not allowed',
+  'admin credentials are invalid',
+  'admin session is invalid',
+  'admin session actor id is invalid',
 ]);
 
 export function createApiApp<TOrder>(
@@ -164,81 +163,219 @@ export function createApiApp<TOrder>(
     throw new Error('adminApiToken is required when admin routes are enabled');
   }
 
+  if (
+    options.enableAdminRoutes === true &&
+    options.adminApiToken !== undefined &&
+    /\s/.test(options.adminApiToken)
+  ) {
+    throw new Error('adminApiToken must not contain whitespace');
+  }
+
+  if (
+    options.enableAdminRoutes === true &&
+    options.adminSessionSecret !== undefined &&
+    !isStrongAdminSessionSecret(options.adminSessionSecret)
+  ) {
+    throw new Error('adminSessionSecret must be at least 32 characters and contain no whitespace');
+  }
+
+  if (options.telegramBotToken !== undefined) {
+    if (!options.telegramBotToken.trim()) {
+      throw new Error('telegramBotToken must be non-empty when provided');
+    }
+
+    if (/\s/.test(options.telegramBotToken)) {
+      throw new Error('telegramBotToken must not contain whitespace');
+    }
+  }
+
+  if (
+    options.telegramInitDataMaxAgeSeconds !== undefined &&
+    (
+      !Number.isSafeInteger(options.telegramInitDataMaxAgeSeconds) ||
+      options.telegramInitDataMaxAgeSeconds <= 0
+    )
+  ) {
+    throw new Error('telegramInitDataMaxAgeSeconds must be a positive safe integer');
+  }
+
   const app = Fastify({ logger: false });
   const now = options.now ?? (() => new Date());
   const publicIdFactory = options.publicIdFactory ?? createPublicId;
+  const adminActorIds = createAdminActorIdAllowlist(options.adminActorIds);
+  const adminLoginFailures = new Map<string, AdminLoginFailureState>();
 
-  app.get('/health', async () => ({
-    status: 'ok',
-  }));
+  app.get('/health', async (request, reply) => {
+    parseBody(emptyQuerySchema, request.query);
+
+    return reply.send(validateApiResponse(healthResponseSchema, { status: 'ok' }));
+  });
+
+  app.get('/api/rates/usdt-rub', async (request, reply) => {
+    parseBody(emptyQuerySchema, request.query);
+
+    const rates = normalizeUsdtRubRates(
+      await getUsdtRubRates({
+        provider: options.rateProvider,
+        now: now(),
+      }),
+    );
+
+    return reply.send(validateApiResponse(ratesResponseSchema, {
+      rates: {
+        pair: 'USDT_RUB',
+        ...rates,
+      },
+    }));
+  });
 
   if (options.enableAdminRoutes === true) {
-    app.post('/api/address-pool/import', async (request, reply) => {
-      assertAdminAuthorization({
-        authorization: request.headers.authorization,
-        token: options.adminApiToken!,
+    if (options.adminSessionSecret) {
+      app.post('/api/admin/session', async (request, reply) => {
+        parseBody(emptyQuerySchema, request.query);
+        const requestNow = now();
+        const body = parseBody(adminSessionBodySchema, request.body);
+        assertAdminLoginNotRateLimited(adminLoginFailures, body.username, requestNow);
+
+        let result;
+        try {
+          result = await authenticateAdminInDb({
+            db: options.db,
+            username: body.username,
+            password: body.password,
+            sessionSecret: options.adminSessionSecret!,
+            now: requestNow,
+          });
+        } catch (error: unknown) {
+          if (
+            error instanceof Error &&
+            error.message === 'admin credentials are invalid'
+          ) {
+            recordAdminLoginFailure(adminLoginFailures, body.username, requestNow);
+          }
+          throw error;
+        }
+        resetAdminLoginFailures(adminLoginFailures, body.username);
+
+        return reply.send(validateApiResponse(adminSessionResponseSchema, result));
       });
+    }
+
+    app.post('/api/address-pool/import', async (request, reply) => {
+      const requestNow = now();
+      const adminAuthorization = await resolveAdminAuthorization({
+        db: options.db,
+        authorization: request.headers.authorization,
+        apiToken: options.adminApiToken!,
+        sessionSecret: options.adminSessionSecret,
+        now: requestNow,
+      });
+      const actorId = resolveAdminActorId(
+        adminAuthorization,
+        request.headers['x-admin-actor-id'],
+        adminActorIds,
+      );
+      parseBody(emptyQuerySchema, request.query);
       const body = parseBody(addressPoolImportBodySchema, request.body);
       const result = await importAddressPoolToDb({
         db: options.db,
         rows: body.rows,
+        actorId,
+        now: requestNow,
       });
 
-      return reply.code(201).send(result);
+      return reply
+        .code(201)
+        .send(validateApiResponse(addressPoolImportResponseSchema, result));
     });
 
     app.get('/api/admin/orders/active', async (request, reply) => {
-      assertAdminAuthorization({
+      const adminAuthorization = await resolveAdminAuthorization({
+        db: options.db,
         authorization: request.headers.authorization,
-        token: options.adminApiToken!,
+        apiToken: options.adminApiToken!,
+        sessionSecret: options.adminSessionSecret,
+        now: now(),
       });
-      const query = parseBody(orderListQuerySchema, request.query);
+      resolveAdminActorId(
+        adminAuthorization,
+        request.headers['x-admin-actor-id'],
+        adminActorIds,
+      );
+      const query = parseBody(adminOrderListQuerySchema, request.query);
       const orders = await listAllActiveOrders(options.db, {
         limit: query.limit,
       });
 
-      return reply.send({ orders });
+      return reply.send(validateApiResponse(ordersResponseSchema, { orders }));
     });
 
     app.post('/api/admin/orders/:publicId/status', async (request, reply) => {
-      assertAdminAuthorization({
+      const requestNow = now();
+      const adminAuthorization = await resolveAdminAuthorization({
+        db: options.db,
         authorization: request.headers.authorization,
-        token: options.adminApiToken!,
+        apiToken: options.adminApiToken!,
+        sessionSecret: options.adminSessionSecret,
+        now: requestNow,
       });
+      const actorId = resolveAdminActorId(
+        adminAuthorization,
+        request.headers['x-admin-actor-id'],
+        adminActorIds,
+      );
       const params = parseBody(orderParamsSchema, request.params);
+      parseBody(emptyQuerySchema, request.query);
       const body = parseBody(managerStatusBodySchema, request.body);
-      const order = await setManagerOrderStatusInDb(options.db, {
+      await setManagerOrderStatusInDb(options.db, {
         publicId: params.publicId,
-        actorId: body.actorId,
+        actorId,
         status: body.status,
         comment: body.comment,
-        now: now(),
+        now: requestNow,
+      });
+      const order = await readManagerOrderDto(options.db, {
+        publicId: params.publicId,
       });
 
-      return reply.send({ order });
+      return reply.send(validateApiResponse(orderResponseSchema, { order }));
     });
 
     app.post('/api/admin/orders/:publicId/manual-crypto-payout', async (request, reply) => {
-      assertAdminAuthorization({
+      const requestNow = now();
+      const adminAuthorization = await resolveAdminAuthorization({
+        db: options.db,
         authorization: request.headers.authorization,
-        token: options.adminApiToken!,
+        apiToken: options.adminApiToken!,
+        sessionSecret: options.adminSessionSecret,
+        now: requestNow,
       });
+      const actorId = resolveAdminActorId(
+        adminAuthorization,
+        request.headers['x-admin-actor-id'],
+        adminActorIds,
+      );
       const params = parseBody(orderParamsSchema, request.params);
+      parseBody(emptyQuerySchema, request.query);
       const body = parseBody(manualCryptoPayoutBodySchema, request.body);
-      const order = await recordManualCryptoPayoutInDb(options.db, {
+      await recordManualCryptoPayoutInDb(options.db, {
         publicId: params.publicId,
-        actorId: body.actorId,
+        actorId,
         txId: body.txId,
         comment: body.comment,
-        now: now(),
+        now: requestNow,
+      });
+      const order = await readManagerOrderDto(options.db, {
+        publicId: params.publicId,
       });
 
-      return reply.send({ order });
+      return reply.send(validateApiResponse(orderResponseSchema, { order }));
     });
   }
 
   if (options.telegramBotToken) {
     app.post('/api/telegram/validate-init-data', async (request, reply) => {
+      parseBody(emptyQuerySchema, request.query);
       const body = parseBody(telegramInitDataBodySchema, request.body);
       const validated = validateTelegramInitData({
         initData: body.initData,
@@ -247,60 +384,72 @@ export function createApiApp<TOrder>(
         maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
       });
 
-      return reply.send({
+      return reply.send(validateApiResponse(telegramInitDataValidationResponseSchema, {
         authDate: validated.authDate.toISOString(),
         queryId: validated.queryId,
         user: validated.user,
-      });
+      }));
     });
   }
 
   app.get('/api/orders/active', async (request, reply) => {
+    const requestNow = now();
+    const telegramInitData = validateTelegramAuthorization({
+      authorization: request.headers.authorization,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: requestNow,
+    });
     const query = parseBody(orderListQuerySchema, request.query);
     const userId = await resolveRequestUserId({
       db: options.db,
-      authorization: request.headers.authorization,
       fallbackUserId: query.userId,
-      botToken: options.telegramBotToken,
-      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
-      now: now(),
+      telegramInitData,
     });
     const orders = await listActiveOrders(options.db, {
       userId,
       limit: query.limit,
     });
 
-    return reply.send({ orders });
+    return reply.send(validateApiResponse(ordersResponseSchema, { orders }));
   });
 
   app.get('/api/orders/history', async (request, reply) => {
+    const requestNow = now();
+    const telegramInitData = validateTelegramAuthorization({
+      authorization: request.headers.authorization,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: requestNow,
+    });
     const query = parseBody(orderListQuerySchema, request.query);
     const userId = await resolveRequestUserId({
       db: options.db,
-      authorization: request.headers.authorization,
       fallbackUserId: query.userId,
-      botToken: options.telegramBotToken,
-      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
-      now: now(),
+      telegramInitData,
     });
     const orders = await listHistoryOrders(options.db, {
       userId,
       limit: query.limit,
     });
 
-    return reply.send({ orders });
+    return reply.send(validateApiResponse(ordersResponseSchema, { orders }));
   });
 
   app.get('/api/orders/:publicId', async (request, reply) => {
+    const requestNow = now();
+    const telegramInitData = validateTelegramAuthorization({
+      authorization: request.headers.authorization,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: requestNow,
+    });
     const params = parseBody(orderParamsSchema, request.params);
     const query = parseBody(userQuerySchema, request.query);
     const userId = await resolveRequestUserId({
       db: options.db,
-      authorization: request.headers.authorization,
       fallbackUserId: query.userId,
-      botToken: options.telegramBotToken,
-      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
-      now: now(),
+      telegramInitData,
     });
     const order = await getOrderByPublicId(options.db, {
       userId,
@@ -314,71 +463,111 @@ export function createApiApp<TOrder>(
       });
     }
 
-    return reply.send({ order });
+    return reply.send(validateApiResponse(orderResponseSchema, { order }));
   });
 
   app.get('/api/profile', async (request, reply) => {
+    const requestNow = now();
+    const telegramInitData = validateTelegramAuthorization({
+      authorization: request.headers.authorization,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: requestNow,
+    });
     const query = parseBody(userQuerySchema, request.query);
     const userId = await resolveRequestUserId({
       db: options.db,
-      authorization: request.headers.authorization,
       fallbackUserId: query.userId,
-      botToken: options.telegramBotToken,
-      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
-      now: now(),
+      telegramInitData,
     });
     const profile = await getUserProfile(options.db, { userId });
 
-    return reply.send({ profile });
+    return reply.send(validateApiResponse(profileResponseSchema, { profile }));
   });
 
   app.post('/api/orders/buy', async (request, reply) => {
+    const requestNow = now();
+    const telegramInitData = validateTelegramAuthorization({
+      authorization: request.headers.authorization,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: requestNow,
+    });
+    parseBody(emptyQuerySchema, request.query);
     const body = parseBody(buyOrderBodySchema, request.body);
     const userId = await resolveRequestUserId({
       db: options.db,
-      authorization: request.headers.authorization,
       fallbackUserId: body.userId,
-      botToken: options.telegramBotToken,
-      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
-      now: now(),
+      telegramInitData,
     });
-    const order = await createBuyUsdtOrderInDb(options.db, {
-      publicId: publicIdFactory(),
-      userId,
-      amountUsdt: body.amountUsdt,
+    const quote = createUsdtRubOrderQuote({
+      direction: 'BUY_USDT',
       amountRub: body.amountRub,
-      rateSnapshot: body.rateSnapshot,
+      rates: await getUsdtRubRates({
+        provider: options.rateProvider,
+        now: requestNow,
+      }),
+    });
+    const publicId = publicIdFactory();
+    await createBuyUsdtOrderInDb(options.db, {
+      publicId,
+      userId,
+      customerLastName: body.customerLastName,
+      customerFirstName: body.customerFirstName,
+      customerMiddleName: body.customerMiddleName,
+      amountUsdt: quote.amountUsdt,
+      amountRub: quote.amountRub,
+      rateSnapshot: quote.rateSnapshot,
       clientPayoutAddress: body.clientPayoutAddress,
-      now: now(),
+      now: requestNow,
       rateTtlMinutes: body.rateTtlMinutes ?? DEFAULT_RATE_TTL_MINUTES,
       orderTtlMinutes: body.orderTtlMinutes ?? DEFAULT_ORDER_TTL_MINUTES,
     });
+    const order = await readCreatedOrderDto(options.db, { userId, publicId });
 
-    return reply.code(201).send({ order });
+    return reply.code(201).send(validateApiResponse(orderResponseSchema, { order }));
   });
 
   app.post('/api/orders/sell', async (request, reply) => {
+    const requestNow = now();
+    const telegramInitData = validateTelegramAuthorization({
+      authorization: request.headers.authorization,
+      botToken: options.telegramBotToken,
+      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
+      now: requestNow,
+    });
+    parseBody(emptyQuerySchema, request.query);
     const body = parseBody(sellOrderBodySchema, request.body);
     const userId = await resolveRequestUserId({
       db: options.db,
-      authorization: request.headers.authorization,
       fallbackUserId: body.userId,
-      botToken: options.telegramBotToken,
-      maxAgeSeconds: options.telegramInitDataMaxAgeSeconds,
-      now: now(),
+      telegramInitData,
     });
-    const order = await createSellUsdtOrderInDb(options.db, {
-      publicId: publicIdFactory(),
-      userId,
+    const quote = createUsdtRubOrderQuote({
+      direction: 'SELL_USDT',
       amountUsdt: body.amountUsdt,
-      amountRub: body.amountRub,
-      rateSnapshot: body.rateSnapshot,
-      now: now(),
+      rates: await getUsdtRubRates({
+        provider: options.rateProvider,
+        now: requestNow,
+      }),
+    });
+    const publicId = publicIdFactory();
+    await createSellUsdtOrderInDb(options.db, {
+      publicId,
+      userId,
+      customerLastName: body.customerLastName,
+      customerFirstName: body.customerFirstName,
+      customerMiddleName: body.customerMiddleName,
+      amountUsdt: quote.amountUsdt,
+      amountRub: quote.amountRub,
+      rateSnapshot: quote.rateSnapshot,
+      now: requestNow,
       rateTtlMinutes: body.rateTtlMinutes ?? DEFAULT_RATE_TTL_MINUTES,
       orderTtlMinutes: body.orderTtlMinutes ?? DEFAULT_ORDER_TTL_MINUTES,
     });
+    const order = await readCreatedOrderDto(options.db, { userId, publicId });
 
-    return reply.code(201).send({ order });
+    return reply.code(201).send(validateApiResponse(orderResponseSchema, { order }));
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -413,6 +602,13 @@ export function createApiApp<TOrder>(
       });
     }
 
+    if (isAdminLoginRateLimitError(error)) {
+      return reply.code(429).send({
+        error: 'admin_login_rate_limited',
+        message: error.message,
+      });
+    }
+
     if (isNotFoundError(error)) {
       return reply.code(404).send({
         error: 'not_found',
@@ -436,14 +632,121 @@ export function createApiApp<TOrder>(
   return app;
 }
 
-function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
+function parseBody<T>(schema: ZodType<T>, body: unknown): T {
   return schema.parse(body);
 }
 
-function assertAdminAuthorization(input: {
+interface AdminLoginFailureState {
+  count: number;
+  firstFailedAtMs: number;
+}
+
+function assertAdminLoginNotRateLimited(
+  failures: Map<string, AdminLoginFailureState>,
+  username: string,
+  now: Date,
+): void {
+  const key = normalizeAdminLoginRateLimitKey(username);
+  const state = failures.get(key);
+  if (!state) {
+    return;
+  }
+
+  if (now.getTime() - state.firstFailedAtMs >= ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS) {
+    failures.delete(key);
+    return;
+  }
+
+  if (state.count >= ADMIN_LOGIN_MAX_FAILED_ATTEMPTS) {
+    throw new Error('admin login is rate limited');
+  }
+}
+
+function recordAdminLoginFailure(
+  failures: Map<string, AdminLoginFailureState>,
+  username: string,
+  now: Date,
+): void {
+  const key = normalizeAdminLoginRateLimitKey(username);
+  const state = failures.get(key);
+  if (!state || now.getTime() - state.firstFailedAtMs >= ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS) {
+    failures.set(key, {
+      count: 1,
+      firstFailedAtMs: now.getTime(),
+    });
+    return;
+  }
+
+  failures.set(key, {
+    count: state.count + 1,
+    firstFailedAtMs: state.firstFailedAtMs,
+  });
+}
+
+function resetAdminLoginFailures(
+  failures: Map<string, AdminLoginFailureState>,
+  username: string,
+): void {
+  failures.delete(normalizeAdminLoginRateLimitKey(username));
+}
+
+function normalizeAdminLoginRateLimitKey(username: string): string {
+  return username.trim().toLowerCase();
+}
+
+async function getUsdtRubRates(input: {
+  provider: UsdtRubRateProvider | undefined;
+  now: Date;
+}) {
+  if (!input.provider) {
+    throw new Error('rateProvider is required to create orders');
+  }
+
+  return input.provider.getUsdtRubRates({ now: input.now });
+}
+
+async function readCreatedOrderDto(
+  db: OrderReadDb,
+  input: {
+    userId: string;
+    publicId: string;
+  },
+) {
+  const order = await getOrderByPublicId(db, input);
+
+  if (!order) {
+    throw new Error('created order was not readable');
+  }
+
+  return order;
+}
+
+async function readManagerOrderDto(
+  db: OrderReadDb,
+  input: {
+    publicId: string;
+  },
+) {
+  const order = await getAnyOrderByPublicId(db, input);
+
+  if (!order) {
+    throw new Error('order not found');
+  }
+
+  return order;
+}
+
+interface ResolvedAdminAuthorization {
+  actorId: string | undefined;
+}
+
+async function resolveAdminAuthorization(input: {
+  db: AdminAuthDb;
   authorization: string | undefined;
-  token: string;
-}): void {
+  apiToken: string;
+  sessionSecret: string | undefined;
+  now: Date;
+}): Promise<ResolvedAdminAuthorization> {
   if (!input.authorization) {
     throw new Error('admin authorization is required');
   }
@@ -453,9 +756,46 @@ function assertAdminAuthorization(input: {
     throw new Error('admin authorization must use Bearer scheme');
   }
 
-  if (!safeStringEqual(rest.join(' '), input.token)) {
-    throw new Error('admin authorization token is invalid');
+  const token = rest.join(' ');
+  if (safeStringEqual(token, input.apiToken)) {
+    return {
+      actorId: undefined,
+    };
   }
+
+  if (input.sessionSecret) {
+    const session = verifyAdminSession({
+      token,
+      secret: input.sessionSecret,
+      now: input.now,
+    });
+    if (session) {
+      const adminUser = await requireActiveAdminSessionInDb({
+        db: input.db,
+        adminId: session.adminId,
+        username: session.username,
+        role: session.role,
+      });
+
+      if (!isValidAdminActorId(adminUser.username)) {
+        throw new Error('admin session actor id is invalid');
+      }
+
+      return {
+        actorId: adminUser.username,
+      };
+    }
+  }
+
+  throw new Error('admin authorization token is invalid');
+}
+
+function resolveAdminActorId(
+  authorization: ResolvedAdminAuthorization,
+  headerValue: string | string[] | undefined,
+  allowlist: ReadonlySet<string> | undefined,
+): string {
+  return authorization.actorId ?? readAdminActorIdHeader(headerValue, allowlist);
 }
 
 function safeStringEqual(left: string, right: string): boolean {
@@ -468,33 +808,70 @@ function safeStringEqual(left: string, right: string): boolean {
   );
 }
 
+function createAdminActorIdAllowlist(
+  actorIds: readonly string[] | undefined,
+): ReadonlySet<string> | undefined {
+  if (!actorIds) {
+    return undefined;
+  }
+
+  if (actorIds.length === 0) {
+    throw new Error('ADMIN_ACTOR_IDS must contain at least one actor id');
+  }
+
+  const normalized = actorIds.map((actorId) => actorId.trim());
+
+  if (normalized.some((actorId) => !actorId)) {
+    throw new Error('ADMIN_ACTOR_IDS must not contain empty entries');
+  }
+
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error('ADMIN_ACTOR_IDS must not contain duplicate values');
+  }
+
+  if (normalized.some((actorId) => !isValidAdminActorId(actorId))) {
+    throw new Error('ADMIN_ACTOR_IDS contains an invalid actor id');
+  }
+
+  return new Set(normalized);
+}
+
 async function resolveRequestUserId(input: {
   db: TelegramUserDb;
-  authorization: string | undefined;
   fallbackUserId: string | undefined;
-  botToken: string | undefined;
-  maxAgeSeconds: number | undefined;
-  now: Date;
+  telegramInitData: ValidatedTelegramInitData | undefined;
 }): Promise<string> {
-  if (!input.botToken) {
+  if (!input.telegramInitData) {
     if (!input.fallbackUserId) {
       throw new Error('userId is required');
     }
     return input.fallbackUserId;
   }
 
-  const validated = validateTelegramInitData({
+  const resolved = await resolveTelegramUserInDb({
+    db: input.db,
+    telegramUser: input.telegramInitData.user,
+  });
+
+  return resolved.userId;
+}
+
+function validateTelegramAuthorization(input: {
+  authorization: string | undefined;
+  botToken: string | undefined;
+  maxAgeSeconds: number | undefined;
+  now: Date;
+}): ValidatedTelegramInitData | undefined {
+  if (!input.botToken) {
+    return undefined;
+  }
+
+  return validateTelegramInitData({
     initData: readTelegramInitDataAuthorization(input.authorization),
     botToken: input.botToken,
     now: input.now,
     maxAgeSeconds: input.maxAgeSeconds,
   });
-  const resolved = await resolveTelegramUserInDb({
-    db: input.db,
-    telegramUser: validated.user,
-  });
-
-  return resolved.userId;
 }
 
 function readTelegramInitDataAuthorization(authorization: string | undefined): string {
@@ -533,6 +910,10 @@ function isTelegramAuthError(error: unknown): error is Error {
 
 function isAdminAuthError(error: unknown): error is Error {
   return error instanceof Error && ADMIN_AUTH_ERROR_MESSAGES.has(error.message);
+}
+
+function isAdminLoginRateLimitError(error: unknown): error is Error {
+  return error instanceof Error && error.message === 'admin login is rate limited';
 }
 
 function isNotFoundError(error: unknown): error is Error {

@@ -64,6 +64,10 @@ function parseOptionalPositiveInteger(
     return undefined;
   }
 
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+
   const parsed = Number(trimmed);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`${fieldName} must be a positive safe integer`);

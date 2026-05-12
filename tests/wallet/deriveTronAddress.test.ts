@@ -30,4 +30,15 @@ describe('deriveTronAddress', () => {
       deriveTronAddress({ mnemonic: MNEMONIC, index: 0x80000000 }),
     ).toThrow('index must be a safe non-negative integer');
   });
+
+  it('rejects invalid mnemonics with a sanitized error', () => {
+    const invalidMnemonic = 'not a valid mnemonic secret words';
+
+    expect(() =>
+      deriveTronAddress({ mnemonic: invalidMnemonic, index: 0 }),
+    ).toThrow('TRON_MNEMONIC must be a valid BIP39 mnemonic');
+    expect(() =>
+      deriveTronAddress({ mnemonic: invalidMnemonic, index: 0 }),
+    ).not.toThrow(invalidMnemonic);
+  });
 });

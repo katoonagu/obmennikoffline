@@ -12,6 +12,8 @@
     "lint:types": "tsc -p tsconfig.json --noEmit",
     "prisma:generate": "prisma generate",
     "wallet:generate-address-pool": "tsx src/wallet/generateAddressPoolCli.ts",
+    "admin:create-user": "node dist/src/admin/createAdminUserCli.js",
+    "admin:disable-user": "node dist/src/admin/disableAdminUserCli.js",
     "tron:watch-deposits-once": "node dist/src/tron/watchDepositsOnceCli.js",
     "tron:configure-watcher-cursor": "node dist/src/tron/configureWatcherCursorCli.js",
     "orders:expire-open": "node dist/src/orders/expireOrdersCli.js"

@@ -80,6 +80,7 @@ const OPEN_FOR_MANUAL_CRYPTO_PAYOUT = new Set<OrderStatus>([
 ]);
 
 const TRON_TX_ID_PATTERN = /^[0-9a-fA-F]{64}$/;
+const MAX_AUDIT_COMMENT_LENGTH = 500;
 
 const MANAGER_ORDER_SELECT = {
   id: true,
@@ -96,6 +97,7 @@ export async function recordManualCryptoPayoutInDb<TOrder>(
   const publicId = assertRequiredString(input.publicId, 'publicId');
   const actorId = assertRequiredString(input.actorId, 'actorId');
   const txId = normalizeTronTxId(input.txId);
+  const comment = normalizeOptionalComment(input.comment);
   assertValidDate(input.now, 'now');
 
   return db.$transaction(async (tx) => {
@@ -133,7 +135,7 @@ export async function recordManualCryptoPayoutInDb<TOrder>(
             txId,
             clientPayoutAddress: order.clientPayoutAddress,
           },
-          input.comment,
+          comment,
         ),
         createdAt: input.now,
       },
@@ -149,6 +151,7 @@ export async function setManagerOrderStatusInDb<TOrder>(
 ): Promise<TOrder> {
   const publicId = assertRequiredString(input.publicId, 'publicId');
   const actorId = assertRequiredString(input.actorId, 'actorId');
+  const comment = normalizeOptionalComment(input.comment);
   assertValidDate(input.now, 'now');
 
   if (!MANAGER_SETTABLE_STATUSES.has(input.status)) {
@@ -185,7 +188,7 @@ export async function setManagerOrderStatusInDb<TOrder>(
             previousStatus: order.status,
             nextStatus: input.status,
           },
-          input.comment,
+          comment,
         ),
         createdAt: input.now,
       },
@@ -269,7 +272,7 @@ function withOptionalComment(
   metadata: Record<string, string>,
   comment: string | undefined,
 ): Record<string, string> {
-  if (!comment?.trim()) {
+  if (!comment) {
     return metadata;
   }
 
@@ -279,12 +282,25 @@ function withOptionalComment(
   };
 }
 
+function normalizeOptionalComment(comment: unknown): string | undefined {
+  if (comment === undefined) {
+    return undefined;
+  }
+
+  const normalized = assertRequiredString(comment, 'comment');
+  if (normalized.length > MAX_AUDIT_COMMENT_LENGTH) {
+    throw new Error('comment must be at most 500 characters');
+  }
+
+  return normalized;
+}
+
 function assertRequiredString(value: unknown, fieldName: string): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`${fieldName} is required`);
   }
 
-  return value;
+  return value.trim();
 }
 
 function assertValidDate(value: Date, fieldName: string): void {

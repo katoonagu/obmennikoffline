@@ -57,6 +57,33 @@ describe('address pool CSV', () => {
       },
     ]);
   });
+
+  it('rejects invalid TRON addresses while parsing or rendering rows', () => {
+    expect(() =>
+      parseAddressPoolCsv(
+        'network,asset,derivation_index,address\nTRON,USDT,2,not-a-tron-address\n',
+      ),
+    ).toThrow('address must be a valid TRON base58 address');
+
+    expect(() =>
+      renderAddressPoolCsv([
+        {
+          network: 'TRON',
+          asset: 'USDT',
+          derivationIndex: 2,
+          address: 'not-a-tron-address',
+        },
+      ]),
+    ).toThrow('address must be a valid TRON base58 address');
+  });
+
+  it('rejects non-decimal derivation indexes while parsing rows', () => {
+    expect(() =>
+      parseAddressPoolCsv(
+        'network,asset,derivation_index,address\nTRON,USDT,1e2,TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY\n',
+      ),
+    ).toThrow('derivation_index must be a safe non-negative integer');
+  });
 });
 
 describe('generate address pool CLI', () => {
@@ -83,6 +110,49 @@ describe('generate address pool CLI', () => {
 
     expect(exitCode).toBe(1);
     expect(io.stderr).toBe('--out is required\n');
+    expect(io.stdout).toBe('');
+  });
+
+  it('fails on non-decimal numeric arguments', async () => {
+    const countIo = createTestIo();
+    const countExitCode = await runGenerateAddressPoolCli(
+      ['--count', '1e1', '--start-index', '0', '--out', 'address-pool.csv'],
+      { TRON_MNEMONIC: MNEMONIC },
+      countIo,
+    );
+
+    expect(countExitCode).toBe(1);
+    expect(countIo.stderr).toBe('--count must be a safe non-negative integer\n');
+    expect(countIo.stdout).toBe('');
+
+    const startIndexIo = createTestIo();
+    const startIndexExitCode = await runGenerateAddressPoolCli(
+      ['--count', '1', '--start-index', '1e1', '--out', 'address-pool.csv'],
+      { TRON_MNEMONIC: MNEMONIC },
+      startIndexIo,
+    );
+
+    expect(startIndexExitCode).toBe(1);
+    expect(startIndexIo.stderr).toBe(
+      '--start-index must be a safe non-negative integer\n',
+    );
+    expect(startIndexIo.stdout).toBe('');
+  });
+
+  it('fails with a sanitized error when TRON_MNEMONIC is invalid', async () => {
+    const invalidMnemonic = 'not a valid mnemonic secret words';
+    const io = createTestIo();
+    const exitCode = await runGenerateAddressPoolCli(
+      ['--count', '1', '--start-index', '0', '--out', 'address-pool.csv'],
+      { TRON_MNEMONIC: invalidMnemonic },
+      io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(io.stderr).toBe(
+      'TRON_MNEMONIC must be a valid BIP39 mnemonic\n',
+    );
+    expect(io.stderr).not.toContain(invalidMnemonic);
     expect(io.stdout).toBe('');
   });
 

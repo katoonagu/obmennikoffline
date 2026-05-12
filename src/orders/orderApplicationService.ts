@@ -8,6 +8,7 @@ import {
 } from './orderService.js';
 
 const DEFAULT_RESERVATION_ATTEMPTS = 3;
+const VALIDATION_ONLY_DEPOSIT_ADDRESS_ID = 'validation-only-deposit-address-id';
 
 export interface OrderCreateData extends CreatedOrder {}
 
@@ -89,7 +90,7 @@ export async function createSellUsdtOrderInDb<TOrder>(
 
   createSellUsdtOrder({
     ...input,
-    depositAddressId: 'validation-placeholder',
+    depositAddressId: VALIDATION_ONLY_DEPOSIT_ADDRESS_ID,
   });
 
   return db.$transaction(async (tx) => {
@@ -158,6 +159,9 @@ function toOrderCreateData(order: CreatedOrder): OrderCreateData {
     direction: order.direction,
     asset: order.asset,
     network: order.network,
+    customerLastName: order.customerLastName,
+    customerFirstName: order.customerFirstName,
+    customerMiddleName: order.customerMiddleName,
     amountUsdt: order.amountUsdt,
     amountRub: order.amountRub,
     rateSnapshot: order.rateSnapshot,

@@ -45,6 +45,11 @@ enum OrderStatus {
   rejected
 }
 
+enum AdminRole {
+  manager
+  owner
+}
+
 model User {
   id              String           @id @default(cuid())
   createdAt       DateTime         @default(now())
@@ -65,6 +70,16 @@ model TelegramProfile {
   user           User     @relation(fields: [userId], references: [id])
 }
 
+model AdminUser {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  passwordHash String
+  role         AdminRole @default(manager)
+  disabledAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
 model Order {
   id                  String                  @id @default(cuid())
   publicId            String                  @unique
@@ -72,6 +87,9 @@ model Order {
   direction           OrderDirection
   asset               Asset                   @default(USDT)
   network             Network                 @default(TRON)
+  customerLastName    String                  @default("")
+  customerFirstName   String                  @default("")
+  customerMiddleName  String                  @default("")
   amountUsdt          Decimal?                @db.Decimal(36, 6)
   amountRub           Decimal?                @db.Decimal(36, 2)
   rateSnapshot        Decimal                 @db.Decimal(36, 6)

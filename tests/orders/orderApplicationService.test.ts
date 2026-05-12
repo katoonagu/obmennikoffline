@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import {
   createBuyUsdtOrderInDb,
   createSellUsdtOrderInDb,
@@ -62,6 +62,9 @@ describe('orderApplicationService', () => {
       createBuyUsdtOrderInDb(db, {
         publicId: 'E97010',
         userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
         amountUsdt: '2602.400000',
         amountRub: '200000.00',
         rateSnapshot: '76.850000',
@@ -96,6 +99,9 @@ describe('orderApplicationService', () => {
       createSellUsdtOrderInDb(db, {
         publicId: 'E74737',
         userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
         amountUsdt: '5000.000000',
         amountRub: '381250.00',
         rateSnapshot: '76.250000',
@@ -161,6 +167,9 @@ describe('orderApplicationService', () => {
       createSellUsdtOrderInDb(db, {
         publicId: 'E74738',
         userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
         amountUsdt: '5000.000000',
         amountRub: '381250.00',
         rateSnapshot: '76.250000',
@@ -185,6 +194,9 @@ describe('orderApplicationService', () => {
       createSellUsdtOrderInDb(db, {
         publicId: 'E74739',
         userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
         amountUsdt: '5000.000000',
         amountRub: '381250.00',
         rateSnapshot: '76.250000',
@@ -205,6 +217,9 @@ describe('orderApplicationService', () => {
       createSellUsdtOrderInDb(db, {
         publicId: 'E74740',
         userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
         amountUsdt: '1.1234567',
         amountRub: '381250.00',
         rateSnapshot: '76.250000',
@@ -225,6 +240,9 @@ describe('orderApplicationService', () => {
       createSellUsdtOrderInDb(db, {
         publicId: 'E74741',
         userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
         amountUsdt: '5000.000000',
         amountRub: '381250.00',
         rateSnapshot: '76.250000',

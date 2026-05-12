@@ -1,3 +1,5 @@
+import { assertTronAddress } from '../domain/tronAddress.js';
+
 const HEADER = 'network,asset,derivation_index,address';
 
 export type AddressPoolNetwork = 'TRON';
@@ -47,7 +49,12 @@ function parseRow(line: string, lineNumber: number): AddressPoolCsvRow {
   }
 
   const [network, asset, derivationIndexValue, address] = columns;
-  const derivationIndex = Number(derivationIndexValue);
+  const normalizedDerivationIndex = derivationIndexValue.trim();
+  if (!/^\d+$/.test(normalizedDerivationIndex)) {
+    throw new Error('derivation_index must be a safe non-negative integer');
+  }
+
+  const derivationIndex = Number(normalizedDerivationIndex);
   const row = {
     network,
     asset,
@@ -79,7 +86,9 @@ function assertAddressPoolRow(
     throw new Error('derivation_index must be a safe non-negative integer');
   }
 
-  if (typeof row.address !== 'string' || row.address.length === 0) {
-    throw new Error('address is required');
+  if (typeof row.address !== 'string') {
+    throw new Error('address must be a valid TRON base58 address');
   }
+
+  assertTronAddress(row.address, 'address');
 }

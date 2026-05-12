@@ -52,6 +52,28 @@ describe('parseConfigureWatcherCursorCliEnv', () => {
     });
   });
 
+  it('rejects zero confirmation depth only in production', () => {
+    expect(
+      parseConfigureWatcherCursorCliEnv({
+        NODE_ENV: 'development',
+        TRON_WATCHER_LAST_PROCESSED_BLOCK: '100',
+        TRON_WATCHER_CONFIRMATION_DEPTH: '0',
+      }),
+    ).toMatchObject({
+      confirmationDepth: 0,
+    });
+
+    expect(() =>
+      parseConfigureWatcherCursorCliEnv({
+        NODE_ENV: 'production',
+        TRON_WATCHER_LAST_PROCESSED_BLOCK: '100',
+        TRON_WATCHER_CONFIRMATION_DEPTH: '0',
+      }),
+    ).toThrow(
+      'TRON_WATCHER_CONFIRMATION_DEPTH must be greater than zero in production',
+    );
+  });
+
   it('rejects missing or malformed block settings before touching the database', () => {
     expect(() => parseConfigureWatcherCursorCliEnv({})).toThrow(
       'TRON_WATCHER_LAST_PROCESSED_BLOCK is required',
@@ -75,7 +97,23 @@ describe('parseConfigureWatcherCursorCliEnv', () => {
     expect(() =>
       parseConfigureWatcherCursorCliEnv({
         TRON_WATCHER_LAST_PROCESSED_BLOCK: '100',
+        TRON_WATCHER_CONFIRMATION_DEPTH: '1e1',
+      }),
+    ).toThrow(
+      'TRON_WATCHER_CONFIRMATION_DEPTH must be a non-negative safe integer',
+    );
+
+    expect(() =>
+      parseConfigureWatcherCursorCliEnv({
+        TRON_WATCHER_LAST_PROCESSED_BLOCK: '100',
         TRON_WATCHER_MAX_BLOCK_RANGE: '0',
+      }),
+    ).toThrow('TRON_WATCHER_MAX_BLOCK_RANGE must be a positive safe integer');
+
+    expect(() =>
+      parseConfigureWatcherCursorCliEnv({
+        TRON_WATCHER_LAST_PROCESSED_BLOCK: '100',
+        TRON_WATCHER_MAX_BLOCK_RANGE: '1e2',
       }),
     ).toThrow('TRON_WATCHER_MAX_BLOCK_RANGE must be a positive safe integer');
   });
@@ -128,5 +166,43 @@ describe('runConfigureWatcherCursorCli', () => {
         2,
       ),
     ]);
+  });
+
+  it('accepts documented CLI flags for cursor provisioning', async () => {
+    const db = {} as UsdtDepositWatcherCursorProvisioningDb;
+    const configuredCursor = createCursor({
+      id: 'custom-cursor',
+      lastProcessedBlock: 123456n,
+      confirmationDepth: 12,
+      maxBlockRange: 250,
+    });
+    const configureCursor = vi.fn(async () => configuredCursor);
+
+    await expect(
+      runConfigureWatcherCursorCli({
+        env: {},
+        argv: [
+          '--cursor-id',
+          'custom-cursor',
+          '--last-processed-block',
+          '123456',
+          '--confirmation-depth',
+          '12',
+          '--max-block-range',
+          '250',
+        ],
+        db,
+        configureCursor,
+        writeOutput: vi.fn(),
+      }),
+    ).resolves.toBe(0);
+
+    expect(configureCursor).toHaveBeenCalledWith({
+      db,
+      cursorId: 'custom-cursor',
+      lastProcessedBlock: 123456n,
+      confirmationDepth: 12,
+      maxBlockRange: 250,
+    });
   });
 });

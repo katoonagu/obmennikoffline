@@ -23,6 +23,9 @@ export interface ReadableOrderRecord {
   direction: OrderDirection;
   asset: Asset;
   network: Network;
+  customerLastName: string;
+  customerFirstName: string;
+  customerMiddleName: string;
   amountUsdt: unknown | null;
   amountRub: unknown | null;
   rateSnapshot: unknown;
@@ -33,6 +36,8 @@ export interface ReadableOrderRecord {
     address: string;
   } | null;
   clientPayoutAddress: string | null;
+  payoutTxId: string | null;
+  payoutTxRecordedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
@@ -43,6 +48,11 @@ export interface OrderDto {
   direction: OrderDirection;
   asset: Asset;
   network: Network;
+  customer: {
+    lastName: string;
+    firstName: string;
+    middleName: string;
+  };
   amountUsdt: string | null;
   amountRub: string | null;
   rateSnapshot: string;
@@ -51,6 +61,10 @@ export interface OrderDto {
   status: OrderStatus;
   depositAddress: string | null;
   clientPayoutAddress: string | null;
+  cryptoPayout: {
+    txId: string;
+    recordedAt: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -134,6 +148,9 @@ const ORDER_READ_SELECT = {
   direction: true,
   asset: true,
   network: true,
+  customerLastName: true,
+  customerFirstName: true,
+  customerMiddleName: true,
   amountUsdt: true,
   amountRub: true,
   rateSnapshot: true,
@@ -146,6 +163,8 @@ const ORDER_READ_SELECT = {
     },
   },
   clientPayoutAddress: true,
+  payoutTxId: true,
+  payoutTxRecordedAt: true,
   createdAt: true,
   updatedAt: true,
   completedAt: true,
@@ -243,6 +262,23 @@ export async function getOrderByPublicId(
   return order ? toOrderDto(order) : null;
 }
 
+export async function getAnyOrderByPublicId(
+  db: OrderReadDb,
+  input: {
+    publicId: string;
+  },
+): Promise<OrderDto | null> {
+  const publicId = assertRequiredString(input.publicId, 'publicId');
+  const order = await db.order.findFirst({
+    where: {
+      publicId,
+    },
+    select: ORDER_READ_SELECT,
+  });
+
+  return order ? toOrderDto(order) : null;
+}
+
 export async function getUserProfile(
   db: OrderReadDb,
   input: {
@@ -300,6 +336,11 @@ function toOrderDto(order: ReadableOrderRecord): OrderDto {
     direction: order.direction,
     asset: order.asset,
     network: order.network,
+    customer: {
+      lastName: order.customerLastName,
+      firstName: order.customerFirstName,
+      middleName: order.customerMiddleName,
+    },
     amountUsdt: toNullableDecimalString(order.amountUsdt),
     amountRub: toNullableDecimalString(order.amountRub),
     rateSnapshot: toRequiredDecimalString(order.rateSnapshot, 'rateSnapshot'),
@@ -308,9 +349,27 @@ function toOrderDto(order: ReadableOrderRecord): OrderDto {
     status: order.status,
     depositAddress: order.depositAddress?.address ?? null,
     clientPayoutAddress: order.clientPayoutAddress,
+    cryptoPayout: toCryptoPayoutDto(order),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     completedAt: order.completedAt?.toISOString() ?? null,
+  };
+}
+
+function toCryptoPayoutDto(
+  order: ReadableOrderRecord,
+): OrderDto['cryptoPayout'] {
+  if (!order.payoutTxId && !order.payoutTxRecordedAt) {
+    return null;
+  }
+
+  if (!order.payoutTxId || !order.payoutTxRecordedAt) {
+    throw new Error('crypto payout record is incomplete');
+  }
+
+  return {
+    txId: order.payoutTxId,
+    recordedAt: order.payoutTxRecordedAt.toISOString(),
   };
 }
 
