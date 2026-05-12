@@ -21,7 +21,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { OrderDto, UserProfileDto } from '../orders/orderReadService.js';
 import {
   createUsdtRubOrderQuote,
@@ -435,9 +435,9 @@ function HomeScreen({
       <section className="section-block" aria-labelledby="active-orders-title">
         <div className="section-heading-row">
           <h3 id="active-orders-title">Активные заявки</h3>
-          <button className="text-button" type="button" onClick={() => onNavigate('history')}>
+          <Button variant="tertiary" type="button" onClick={() => onNavigate('history')}>
             История
-          </button>
+          </Button>
         </div>
         {model.activeOrders.length > 0 ? (
           model.activeOrders.map((order) => (
@@ -488,7 +488,7 @@ function AboutScreen({ screen }: { screen: MiniAppScreen }) {
           );
         })}
       </div>
-      <HighlightStack highlights={screen.highlights} tone="accent" />
+      <HelpSection highlights={screen.highlights} tone="accent" />
     </div>
   );
 }
@@ -534,15 +534,15 @@ function BuyFormScreen({
           onChange({ ...form, clientPayoutAddress })
         }
       />
-      <HighlightStack highlights={screen.highlights} tone="accent" />
+      <HelpSection highlights={screen.highlights} tone="accent" />
       {errorMessage && <p className="form-error">{errorMessage}</p>}
-      <button
-        className="primary-button"
+      <Button
+        variant="primary"
         type="submit"
         disabled={isSubmitting || !isBuyOrderFormReady(form)}
       >
         {screen.cta}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -592,15 +592,15 @@ function SellFormScreen({
         />
         <span>Принимаю правила и условия обмена</span>
       </label>
-      <HighlightStack highlights={screen.highlights} tone="warning" />
+      <HelpSection highlights={screen.highlights} tone="warning" />
       {errorMessage && <p className="form-error">{errorMessage}</p>}
-      <button
-        className="primary-button"
+      <Button
+        variant="primary"
         type="submit"
         disabled={isSubmitting || !isSellOrderFormReady(form)}
       >
         {screen.cta}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -740,15 +740,16 @@ function ConfirmScreen({
           <DataPanel key={row.label} row={row} />
         ))}
       </div>
-      <HighlightStack highlights={highlights} tone="warning" />
+      <TimerSection minutes={20} />
+      <HelpSection highlights={highlights.slice(1)} tone="warning" />
       {errorMessage && <p className="form-error">{errorMessage}</p>}
       <div className="button-row">
-        <button className="secondary-button" type="button" onClick={onBack}>
+        <Button variant="secondary" type="button" onClick={onBack}>
           Изменить
-        </button>
-        <button className="primary-button" type="submit" disabled={isSubmitting}>
+        </Button>
+        <Button variant="primary" type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Создаем заявку' : screen.cta}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -764,9 +765,9 @@ function InvalidConfirmState({
   return (
     <div className="screen-stack">
       <p className="form-error">{message}</p>
-      <button className="secondary-button" type="button" onClick={onBack}>
+      <Button variant="secondary" type="button" onClick={onBack}>
         Вернуться к форме
-      </button>
+      </Button>
     </div>
   );
 }
@@ -788,9 +789,9 @@ function CreatedOrderScreen({
     return (
       <div className="screen-stack">
         <p className="screen-eyebrow">Заявка не выбрана.</p>
-        <button className="secondary-button" type="button" onClick={onHome}>
+        <Button variant="secondary" type="button" onClick={onHome}>
           На главный
-        </button>
+        </Button>
       </div>
     );
   }
@@ -803,8 +804,8 @@ function CreatedOrderScreen({
       <div className="success-panel">
         <CheckCircle2 size={22} />
         <strong>{screen.title}</strong>
-        <span>ID: {order.publicId}</span>
       </div>
+      <PaymentIdSection publicId={order.publicId} />
       {mode === 'sell' && order.depositAddress ? (
         <QrCodePanel address={order.depositAddress} />
       ) : (
@@ -815,18 +816,18 @@ function CreatedOrderScreen({
       )}
       <div className="field-stack">
         <DataPanel row={{ label: model.directionLabel, value: model.primaryAmountLabel, tone: 'mono' }} />
-        {model.rows.map((row) => (
+        {model.rows.filter((row) => !isPromotedDetailRow(row, model)).map((row) => (
           <DataPanel key={row.label} row={row} />
         ))}
       </div>
-      <HighlightStack highlights={screen.highlights} tone={mode === 'sell' ? 'warning' : 'accent'} />
+      <HelpSection highlights={screen.highlights} tone={mode === 'sell' ? 'warning' : 'accent'} />
       <div className="button-row">
-        <button className="secondary-button" type="button" onClick={onDetail}>
+        <Button variant="secondary" type="button" onClick={onDetail}>
           Детали
-        </button>
-        <button className="primary-button" type="button" onClick={onHome}>
+        </Button>
+        <Button variant="primary" type="button" onClick={onHome}>
           {screen.cta}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -843,9 +844,9 @@ function OrderDetailScreen({
     return (
       <div className="screen-stack">
         <p className="screen-eyebrow">Активная заявка не выбрана.</p>
-        <button className="secondary-button" type="button" onClick={onHome}>
+        <Button variant="secondary" type="button" onClick={onHome}>
           На главный
-        </button>
+        </Button>
       </div>
     );
   }
@@ -858,6 +859,8 @@ function OrderDetailScreen({
           {model.statusLabel}
         </span>
       </div>
+
+      <PaymentIdSection publicId={model.publicId} />
 
       <DataPanel row={{
         label: model.directionLabel,
@@ -874,13 +877,13 @@ function OrderDetailScreen({
         </div>
       )}
 
-      {model.rows.map((row) => (
+      {model.rows.filter((row) => !isPromotedDetailRow(row, model)).map((row) => (
         <DataPanel key={row.label} row={row} />
       ))}
 
-      <button className="secondary-button" type="button" onClick={onHome}>
+      <Button variant="secondary" type="button" onClick={onHome}>
         На главный
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1029,10 +1032,10 @@ function FormField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="form-field">
+    <label className="ui-field">
       <span>{label}</span>
       <input
-        className="form-input"
+        className="ui-input"
         value={value}
         inputMode={inputMode}
         placeholder={placeholder}
@@ -1043,7 +1046,67 @@ function FormField({
   );
 }
 
-function HighlightStack({
+function Button({
+  variant,
+  type,
+  disabled,
+  onClick,
+  children,
+}: {
+  variant: 'primary' | 'secondary' | 'tertiary';
+  type?: 'button' | 'submit' | 'reset';
+  disabled?: boolean;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  if (variant === 'primary') {
+    return (
+      <button className="ui-button primary" type={type ?? 'button'} disabled={disabled} onClick={onClick}>
+        {children}
+      </button>
+    );
+  }
+
+  if (variant === 'secondary') {
+    return (
+      <button className="ui-button secondary" type={type ?? 'button'} disabled={disabled} onClick={onClick}>
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <button className="ui-button tertiary" type={type ?? 'button'} disabled={disabled} onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+
+function TimerSection({ minutes }: { minutes: number }) {
+  return (
+    <section className="timer-section" aria-label="Фиксация курса">
+      <Clock3 size={18} />
+      <div>
+        <span>Курс фиксируется</span>
+        <strong>{minutes} минут</strong>
+      </div>
+    </section>
+  );
+}
+
+function PaymentIdSection({ publicId }: { publicId: string }) {
+  return (
+    <section className="payment-id-section" aria-label="ID заявки">
+      <div>
+        <span>ID заявки</span>
+        <strong>{publicId}</strong>
+      </div>
+      <CopyButton value={publicId} label="ID заявки" />
+    </section>
+  );
+}
+
+function HelpSection({
   highlights,
   tone,
 }: {
@@ -1055,9 +1118,9 @@ function HighlightStack({
   }
 
   return (
-    <div className="warning-stack">
+    <div className="help-section">
       {highlights.map((highlight, index) => (
-        <div className={`inline-warning ${tone}`} key={highlight}>
+        <div className={`help-section-item ${tone}`} key={highlight}>
           {tone === 'accent' ? (
             <Info size={18} />
           ) : index === 0 ? (
@@ -1212,10 +1275,17 @@ function DataPanel({ row }: { row: DisplayRow }) {
   );
 }
 
+function isPromotedDetailRow(
+  row: DisplayRow,
+  model: MiniAppOrderDetailViewModel,
+): boolean {
+  return row.value === model.publicId || row.value === model.primaryAmountLabel;
+}
+
 function CopyButton({ value, label }: { value: string; label: string }) {
   return (
     <button
-      className="copy-button"
+      className="ui-copy-button"
       type="button"
       aria-label={`Скопировать ${label}`}
       onClick={() => {

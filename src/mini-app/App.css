@@ -1,8 +1,23 @@
 :root {
-  color: #f2f2f2;
-  background: #080d0e;
+  --mini-bg: #080d0e;
+  --mini-bg-raised: #0d1416;
+  --mini-surface: #121416;
+  --mini-panel: #1a1e20;
+  --mini-panel-strong: #202629;
+  --mini-border: rgba(223, 255, 217, 0.12);
+  --mini-border-strong: rgba(223, 255, 217, 0.24);
+  --mini-text: #f2f2f2;
+  --mini-muted: rgba(242, 242, 242, 0.62);
+  --mini-soft: #dfffd9;
+  --mini-accent: #33bc65;
+  --mini-accent-strong: #62e59a;
+  --mini-cyan: #12dcef;
+  --mini-warning: #f5a623;
+  --mini-danger: #ff6b55;
+  color: var(--mini-text);
+  background: var(--mini-bg);
   font-family:
-    "Neue Montreal", "Satoshi", ui-sans-serif, system-ui, -apple-system,
+    Manrope, "Neue Montreal", "Satoshi", ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: geometricPrecision;
@@ -131,7 +146,7 @@ button:disabled {
 }
 
 .icon-button,
-.copy-button {
+.ui-copy-button {
   display: inline-grid;
   width: 38px;
   height: 38px;
@@ -234,14 +249,18 @@ button:disabled {
 
 .rate-cell span,
 .data-panel span,
-.address-line span {
+.address-line span,
+.payment-id-section span,
+.timer-section span {
   color: rgba(242, 242, 242, 0.58);
   font-size: 12px;
 }
 
 .rate-cell strong,
 .data-panel strong,
-.address-line strong {
+.address-line strong,
+.payment-id-section strong,
+.timer-section strong {
   color: #f2f2f2;
   font-size: 18px;
   font-variant-numeric: tabular-nums;
@@ -367,18 +386,18 @@ button:disabled {
   gap: 8px;
 }
 
-.form-field {
+.ui-field {
   display: grid;
   gap: 7px;
 }
 
-.form-field > span {
+.ui-field > span {
   color: rgba(242, 242, 242, 0.72);
   font-size: 12px;
   font-weight: 700;
 }
 
-.form-input {
+.ui-input {
   width: 100%;
   min-height: 56px;
   border: 1px solid rgba(223, 255, 217, 0.1);
@@ -392,11 +411,11 @@ button:disabled {
   letter-spacing: 0;
 }
 
-.form-input::placeholder {
+.ui-input::placeholder {
   color: rgba(242, 242, 242, 0.26);
 }
 
-.form-input:focus {
+.ui-input:focus {
   border-color: rgba(51, 188, 101, 0.68);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
@@ -434,6 +453,51 @@ button:disabled {
   line-height: 1.35;
 }
 
+.timer-section,
+.payment-id-section {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 11px 14px;
+  border-radius: 8px;
+}
+
+.timer-section {
+  grid-template-columns: auto 1fr;
+  border: 1px solid rgba(245, 166, 35, 0.48);
+  color: var(--mini-warning);
+  background: rgba(245, 166, 35, 0.08);
+}
+
+.timer-section div,
+.payment-id-section div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.timer-section strong {
+  color: var(--mini-warning);
+  font-size: 15px;
+}
+
+.payment-id-section {
+  position: relative;
+  grid-template-columns: 1fr auto;
+  border: 1px solid rgba(51, 188, 101, 0.36);
+  background: rgba(51, 188, 101, 0.08);
+}
+
+.payment-id-section strong {
+  color: var(--mini-accent);
+  font-size: 17px;
+}
+
+.payment-id-section .ui-copy-button {
+  position: static;
+}
+
 .data-panel {
   position: relative;
   display: grid;
@@ -450,7 +514,7 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
-.copy-button {
+.ui-copy-button {
   position: absolute;
   right: 6px;
   bottom: 12px;
@@ -474,12 +538,12 @@ button:disabled {
     "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
 }
 
-.warning-stack {
+.help-section {
   display: grid;
   gap: 8px;
 }
 
-.inline-warning {
+.help-section-item {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -492,13 +556,13 @@ button:disabled {
   line-height: 1.28;
 }
 
-.inline-warning.warning {
+.help-section-item.warning {
   border: 1px solid rgba(245, 166, 35, 0.45);
   color: #f5a623;
   background: rgba(245, 166, 35, 0.07);
 }
 
-.inline-warning.accent {
+.help-section-item.accent {
   border: 1px solid rgba(51, 188, 101, 0.35);
   color: #dfffd9;
   background: rgba(51, 188, 101, 0.08);
@@ -510,21 +574,43 @@ button:disabled {
   gap: 8px;
 }
 
-.primary-button,
-.secondary-button {
+.ui-button {
   min-height: 54px;
   border: 0;
   border-radius: 8px;
-  color: #06100b;
-  background: linear-gradient(135deg, #33bc65, #62e59a);
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
 }
 
-.secondary-button {
+.ui-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ui-button.primary {
+  color: #06100b;
+  background: linear-gradient(135deg, #33bc65, #62e59a);
+}
+
+.ui-button.secondary {
   color: #f2f2f2;
   background: #1a1e20;
+}
+
+.ui-button.tertiary {
+  min-height: 34px;
+  border: 1px solid transparent;
+  color: #33bc65;
+  background: transparent;
+  font-size: 12px;
+}
+
+.ui-button.tertiary:active:not(:disabled) {
+  transform: none;
 }
 
 .success-panel {
@@ -609,7 +695,7 @@ button:disabled {
   font-size: 14px;
 }
 
-.address-line .copy-button {
+.address-line .ui-copy-button {
   position: static;
 }
 
