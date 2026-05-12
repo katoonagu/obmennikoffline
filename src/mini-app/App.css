@@ -521,6 +521,33 @@ button:disabled {
   color: rgba(242, 242, 242, 0.86);
 }
 
+.ui-copy-button.copied {
+  color: var(--mini-accent);
+}
+
+.copy-feedback {
+  position: absolute;
+  right: 34px;
+  max-width: 86px;
+  overflow: hidden;
+  color: var(--mini-accent);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  white-space: nowrap;
+}
+
+.ui-copy-button.copied .copy-feedback {
+  opacity: 1;
+  transform: translateX(0);
+}
+
 .tone-accent {
   color: #33bc65 !important;
 }

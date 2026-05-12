@@ -1283,16 +1283,50 @@ function isPromotedDetailRow(
 }
 
 function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const resetCopiedRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (resetCopiedRef.current !== undefined) {
+        window.clearTimeout(resetCopiedRef.current);
+      }
+    };
+  }, []);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard?.writeText(value);
+    } catch {
+      setCopied(false);
+      return;
+    }
+
+    setCopied(true);
+
+    if (resetCopiedRef.current !== undefined) {
+      window.clearTimeout(resetCopiedRef.current);
+    }
+
+    resetCopiedRef.current = window.setTimeout(() => {
+      setCopied(false);
+      resetCopiedRef.current = undefined;
+    }, 1400);
+  }
+
   return (
     <button
-      className="ui-copy-button"
+      className={copied ? 'ui-copy-button copied' : 'ui-copy-button'}
       type="button"
-      aria-label={`Скопировать ${label}`}
+      aria-label={copied ? `${label} скопирован` : `Скопировать ${label}`}
       onClick={() => {
-        void navigator.clipboard?.writeText(value);
+        void handleCopy();
       }}
     >
-      <Copy size={18} />
+      {copied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
+      <span className="copy-feedback" aria-live="polite">
+        {copied ? 'Скопировано' : ''}
+      </span>
     </button>
   );
 }

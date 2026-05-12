@@ -21,6 +21,7 @@
     "orders:expire-open": "node dist/src/orders/expireOrdersCli.js"
   },
   "dependencies": {
+    "@fontsource/manrope": "^5.2.8",
     "@prisma/client": "^5.22.0",
     "bip39": "^3.1.0",
     "bs58check": "^4.0.0",
