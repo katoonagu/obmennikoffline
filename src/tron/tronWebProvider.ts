@@ -49,6 +49,7 @@ export interface CreateTronWebTronProviderInput {
 }
 
 const TRON_EVENT_PAGE_LIMIT = 200;
+const TRON_EVENT_MAX_PAGES_PER_BLOCK = 1000;
 const USDT_TRC20_DECIMALS = 6;
 
 export function createTronWebTronProvider(
@@ -133,9 +134,16 @@ async function getAllEventsByBlockNumber(
   blockNumber: number,
 ): Promise<unknown[]> {
   const events: unknown[] = [];
+  const seenFingerprints = new Set<string>();
   let fingerprint: string | undefined;
+  let pageCount = 0;
 
   while (true) {
+    pageCount += 1;
+    if (pageCount > TRON_EVENT_MAX_PAGES_PER_BLOCK) {
+      throw new Error('TRON event pagination exceeded max pages per block');
+    }
+
     const response = await client.event.getEventsByBlockNumber(blockNumber, {
       only_confirmed: true,
       limit: TRON_EVENT_PAGE_LIMIT,
@@ -148,11 +156,17 @@ async function getAllEventsByBlockNumber(
 
     events.push(...(Array.isArray(response.data) ? response.data : []));
 
-    if (!response.meta?.fingerprint) {
+    const nextFingerprint = response.meta?.fingerprint;
+    if (!nextFingerprint) {
       return events;
     }
 
-    fingerprint = response.meta.fingerprint;
+    if (seenFingerprints.has(nextFingerprint) || nextFingerprint === fingerprint) {
+      throw new Error('TRON event pagination did not advance');
+    }
+
+    seenFingerprints.add(nextFingerprint);
+    fingerprint = nextFingerprint;
   }
 }
 

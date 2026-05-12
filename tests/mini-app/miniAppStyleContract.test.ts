@@ -100,4 +100,47 @@ describe('Mini App Figma component style contract', () => {
     expect(appSource).toContain('className="buy-instructions-panel"');
     expect(appSource).toContain('className="profile-identity-panel"');
   });
+
+  it('does not pre-render fixed mock orders before runtime data loads', () => {
+    expect(appSource).toContain('useState<OrderDto[]>([])');
+    expect(appSource).toContain('useState<OrderDto | null>(null)');
+    expect(appSource).not.toContain('useState<OrderDto[]>([\n    miniAppMockFixtures.sellOrder');
+    expect(appSource).not.toContain('useState<OrderDto | null>(\n    miniAppMockFixtures.sellOrder');
+  });
+
+  it('keeps History separate from current active orders', () => {
+    expect(appSource).toContain('const [historyOrders, setHistoryOrders] = useState<OrderDto[]>([])');
+    expect(appSource).toContain('api.listHistoryOrders({ limit: 10 })');
+    expect(appSource).toContain('<HistoryScreen orders={historyOrders}');
+    expect(appSource).not.toContain('<HistoryScreen activeOrders={activeOrders}');
+  });
+
+  it('renders a blocking bootstrap error instead of stale payment surfaces after API startup failure', () => {
+    expect(appSource).toContain('function BlockingErrorScreen');
+    expect(appSource).toContain('const [bootstrapError, setBootstrapError]');
+    expect(appSource).toContain('setActiveOrders([])');
+    expect(appSource).toContain('setHistoryOrders([])');
+    expect(appSource).toContain('setSelectedOrder(null)');
+    expect(appSource).toContain('setProfile(initialProfile)');
+    expect(appSource).toContain('<BlockingErrorScreen message={bootstrapError}');
+  });
+
+  it('centers action cards as compact tap targets instead of floating icons high', () => {
+    expect(appCss).toMatch(
+      /\.action-card\s*{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*center;/,
+    );
+    expect(appCss).toMatch(
+      /\.action-card svg\s*{[\s\S]*transform:\s*translateY\(2px\);/,
+    );
+  });
+
+  it('keeps the SELL QR panel focused on the QR code because the address is rendered below', () => {
+    const qrPanelStart = appSource.indexOf('function QrCodePanel');
+    const qrPanelEnd = appSource.indexOf('function QrCodeImage');
+    const qrPanelSource = appSource.slice(qrPanelStart, qrPanelEnd);
+
+    expect(qrPanelSource).toContain('<QrCodeImage value={address} />');
+    expect(qrPanelSource).not.toContain('<AddressLine');
+    expect(qrPanelSource).not.toContain('address-line');
+  });
 });

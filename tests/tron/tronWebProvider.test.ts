@@ -187,6 +187,30 @@ describe('createTronWebTronProvider', () => {
     });
   });
 
+  it('stops TRON event pagination when the provider repeats a fingerprint', async () => {
+    const client = createClient({
+      blockEvents: {
+        '64200001:': [createTransferEvent()],
+        '64200001:page-2': [],
+      },
+      fingerprints: {
+        '64200001:': 'page-2',
+        '64200001:page-2': 'page-2',
+      },
+    });
+    const provider = createTronWebTronProvider({ client });
+
+    await expect(
+      provider.getUsdtTransfersToAddresses({
+        addresses: [DEPOSIT_ADDRESS],
+        fromBlock: 64200001n,
+        toBlock: 64200001n,
+      }),
+    ).rejects.toThrow('TRON event pagination did not advance');
+
+    expect(client.event.getEventsByBlockNumber).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects block ranges that cannot be called through TronWeb block-number APIs', async () => {
     const client = createClient();
     const provider = createTronWebTronProvider({ client });

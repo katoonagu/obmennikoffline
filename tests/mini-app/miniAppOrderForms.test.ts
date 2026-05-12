@@ -20,6 +20,27 @@ describe('Mini App editable order forms', () => {
     expect(normalizeDecimalInput('5 000.1234', 6)).toBe('5000.123400');
   });
 
+  it('rejects decimal values that cannot fit backend Decimal(36, scale)', () => {
+    expect(() => normalizeDecimalInput('1'.repeat(35), 2)).toThrow('invalid decimal precision');
+    expect(() => normalizeDecimalInput('1'.repeat(31), 6)).toThrow('invalid decimal precision');
+    expect(isBuyOrderFormReady({
+      ...createInitialBuyOrderForm(),
+      amountRub: '1'.repeat(35),
+      clientPayoutAddress: PAYOUT_ADDRESS,
+      customerLastName: 'Ivanov',
+      customerFirstName: 'Ivan',
+      customerMiddleName: 'Ivanovich',
+    })).toBe(false);
+    expect(isSellOrderFormReady({
+      ...createInitialSellOrderForm(),
+      amountUsdt: '1'.repeat(31),
+      customerLastName: 'Ivanov',
+      customerFirstName: 'Ivan',
+      customerMiddleName: 'Ivanovich',
+      acceptedTerms: true,
+    })).toBe(false);
+  });
+
   it('starts new order forms empty so users must enter their own wallet and FIO', () => {
     expect(createInitialBuyOrderForm()).toEqual({
       amountRub: '',

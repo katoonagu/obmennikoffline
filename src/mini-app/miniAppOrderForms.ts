@@ -172,7 +172,23 @@ export function normalizeDecimalInput(value: string, scale: number): string {
     throw new Error('invalid decimal scale');
   }
 
+  if (!fitsDecimal(normalized, scale)) {
+    throw new Error('invalid decimal precision');
+  }
+
   return `${integerPart}.${fractionalPart.padEnd(scale, '0')}`;
+}
+
+function fitsDecimal(value: string, scale: number): boolean {
+  const [rawIntegerPart, fractionalPart = ''] = value.split('.');
+  const integerPart = rawIntegerPart.replace(/^0+(?=\d)/, '');
+  const integerDigits = integerPart.length;
+
+  return (
+    fractionalPart.length <= scale &&
+    integerDigits <= 36 - scale &&
+    integerDigits + fractionalPart.length <= 36
+  );
 }
 
 function buildCustomerInput(

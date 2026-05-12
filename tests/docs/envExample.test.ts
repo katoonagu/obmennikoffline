@@ -43,6 +43,8 @@ describe('.env.example contract', () => {
   });
 
   it('documents public Mini App Vite environment without secrets', () => {
+    expect(envExample).toContain('VITE_APP_ENV');
+    expect(envExample).toContain('production/staging Mini App builds');
     expect(envExample).toContain('VITE_MINIAPP_API_MODE');
     expect(envExample).toContain('mock');
     expect(envExample).toContain('api');

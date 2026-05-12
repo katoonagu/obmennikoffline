@@ -8,7 +8,7 @@ import {
 const PAYOUT_ADDRESS = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
 
 describe('Mini App API integration contract', () => {
-  it('loads rates and active orders through the public route contracts', async () => {
+  it('loads rates, active orders, and history through the public route contracts', async () => {
     const fetch = vi.fn(async (url: string) => {
       if (url.endsWith('/api/rates/usdt-rub')) {
         return jsonResponse({
@@ -22,6 +22,10 @@ describe('Mini App API integration contract', () => {
 
       if (url.endsWith('/api/orders/active?userId=telegram-user-1&limit=5')) {
         return jsonResponse({ orders: [miniAppMockFixtures.sellOrder] });
+      }
+
+      if (url.endsWith('/api/orders/history?userId=telegram-user-1&limit=5')) {
+        return jsonResponse({ orders: [miniAppMockFixtures.buyOrder] });
       }
 
       throw new Error(`unexpected url: ${url}`);
@@ -39,6 +43,9 @@ describe('Mini App API integration contract', () => {
     await expect(api.listActiveOrders({ limit: 5 })).resolves.toEqual([
       miniAppMockFixtures.sellOrder,
     ]);
+    await expect(api.listHistoryOrders({ limit: 5 })).resolves.toEqual([
+      miniAppMockFixtures.buyOrder,
+    ]);
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       'https://api.example.test/api/rates/usdt-rub',
@@ -47,6 +54,11 @@ describe('Mini App API integration contract', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       'https://api.example.test/api/orders/active?userId=telegram-user-1&limit=5',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      'https://api.example.test/api/orders/history?userId=telegram-user-1&limit=5',
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -150,19 +162,36 @@ describe('Mini App API integration contract', () => {
     );
   });
 
-  it('provides contract-valid mock fixtures for offline frontend development', async () => {
+  it('surfaces known backend errors as useful Mini App messages', async () => {
+    const api = createMiniAppApiClient({
+      baseUrl: '',
+      devUserId: 'telegram-user-1',
+      fetch: vi.fn(async () => jsonResponse({
+        error: 'address_pool_unavailable',
+        message: 'no available TRON deposit addresses',
+      }, 409)),
+    });
+
+    await expect(api.createSellOrder({
+      customer: {
+        lastName: 'Ivanov',
+        firstName: 'Ivan',
+        middleName: 'Ivanovich',
+      },
+      amountUsdt: '5000.000000',
+    })).rejects.toThrow('Нет свободных TRC-20 адресов');
+  });
+
+  it('keeps mock mode empty until the user creates orders', async () => {
     const api = createMockMiniAppApi();
 
     await expect(api.loadRates()).resolves.toEqual({
       buyRate: '76.850000',
       sellRate: '76.250000',
     });
-    await expect(api.listActiveOrders()).resolves.toEqual([
-      miniAppMockFixtures.sellOrder,
-    ]);
-    await expect(api.getOrder('E00001')).resolves.toEqual(
-      miniAppMockFixtures.sellOrder,
-    );
+    await expect(api.listActiveOrders()).resolves.toEqual([]);
+    await expect(api.listHistoryOrders()).resolves.toEqual([]);
+    await expect(api.getOrder('E00001')).rejects.toThrow('order not found');
     await expect(api.createBuyOrder({
       customer: {
         lastName: 'Ivanov',
@@ -177,19 +206,37 @@ describe('Mini App API integration contract', () => {
       clientPayoutAddress: PAYOUT_ADDRESS,
       status: 'awaiting_office_visit',
     });
-    await expect(api.createSellOrder({
+    const firstSellOrder = await api.createSellOrder({
       customer: {
         lastName: 'Ivanov',
         firstName: 'Ivan',
         middleName: 'Ivanovich',
       },
       amountUsdt: '5000.000000',
-    })).resolves.toMatchObject({
+    });
+    const secondSellOrder = await api.createSellOrder({
+      customer: {
+        lastName: 'Ivanov',
+        firstName: 'Ivan',
+        middleName: 'Ivanovich',
+      },
+      amountUsdt: '4567.000000',
+    });
+
+    expect(firstSellOrder).toMatchObject({
       direction: 'SELL_USDT',
-      depositAddress: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
       clientPayoutAddress: null,
-        status: 'awaiting_deposit',
-      });
+      status: 'awaiting_deposit',
+    });
+    expect(secondSellOrder).toMatchObject({
+      direction: 'SELL_USDT',
+      clientPayoutAddress: null,
+      status: 'awaiting_deposit',
+    });
+    expect(firstSellOrder.depositAddress).toMatch(/^T[A-Za-z0-9]{33}$/);
+    expect(secondSellOrder.depositAddress).toMatch(/^T[A-Za-z0-9]{33}$/);
+    expect(secondSellOrder.depositAddress).not.toBe(firstSellOrder.depositAddress);
+    await expect(api.listActiveOrders()).resolves.toHaveLength(3);
   });
 
   it('loads profile customer FIO used to prefill new order forms', async () => {

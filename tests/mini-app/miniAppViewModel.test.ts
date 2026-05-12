@@ -81,6 +81,18 @@ describe('Mini App view models', () => {
     }));
   });
 
+  it('ignores a corrupted BUY deposit address instead of rendering a server-owned QR', () => {
+    const detail = createMiniAppOrderDetailViewModel({
+      ...miniAppMockFixtures.buyOrder,
+      depositAddress: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
+    });
+
+    expect(detail.qrValue).toBeNull();
+    expect(detail.rows).not.toContainEqual(expect.objectContaining({
+      label: 'РђРґСЂРµСЃ РґР»СЏ РїРµСЂРµРІРѕРґР° (TRC-20)',
+    }));
+  });
+
   it('maps profile stats and stored customer FIO from the backend profile DTO', () => {
     const profile = createMiniAppProfileViewModel(miniAppMockFixtures.profile);
 

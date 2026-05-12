@@ -254,6 +254,11 @@ docker run --name obmennikoffline-postgres -e POSTGRES_DB=obmennikoffline -e POS
 pnpm exec prisma migrate deploy
 ```
 
+The FIO migration is intended for the current MVP data model. If a database
+already contains pre-FIO orders, backfill them before production cutover; until
+backfilled, API/UI responses show an explicit legacy placeholder instead of
+silent blank FIO fields.
+
 Required MVP rate env. Rates must be positive decimal strings.
 `USDT_RUB_BUY_RATE must be greater than USDT_RUB_SELL_RATE`:
 
@@ -320,6 +325,7 @@ pnpm dev:miniapp
 The Mini App defaults to mock fixture mode for design and offline UI work:
 
 ```env
+VITE_APP_ENV="local"
 VITE_MINIAPP_API_MODE="mock"
 ```
 
@@ -329,6 +335,7 @@ Vite dev server with public browser config:
 ```env
 MINIAPP_CORS_ORIGINS="http://127.0.0.1:5173"
 MINIAPP_DEV_AUTH_ENABLED="true"
+VITE_APP_ENV="local"
 VITE_MINIAPP_API_MODE="api"
 VITE_MINIAPP_API_BASE_URL="http://127.0.0.1:3000"
 VITE_MINIAPP_DEV_USER_ID="dev-user-1"
@@ -345,6 +352,11 @@ fallback. If the local API has `TELEGRAM_BOT_TOKEN` configured, set
 `MINIAPP_DEV_AUTH_ENABLED="true"` for local smoke tests without Telegram
 WebApp `initData`. Production startup rejects that flag, so production
 order/profile routes require signed Telegram initData.
+
+For staging or production Mini App builds, set `VITE_APP_ENV="staging"` or
+`VITE_APP_ENV="production"`. The frontend guard rejects `mock` mode, missing
+`VITE_MINIAPP_API_BASE_URL`, `VITE_MINIAPP_DEV_USER_ID`, and browser runtime
+without Telegram WebApp `initData`.
 
 Build:
 

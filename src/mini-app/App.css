@@ -207,16 +207,30 @@ button:disabled {
 }
 
 .action-card {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   min-height: 78px;
-  place-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 0;
   border-radius: 8px;
+  padding: 12px 8px 10px;
   color: #f2f2f2;
   font-size: 14px;
   font-weight: 700;
+  line-height: 1.12;
+  text-align: center;
   cursor: pointer;
+}
+
+.action-card svg {
+  flex: 0 0 auto;
+  transform: translateY(2px);
+}
+
+.action-card span {
+  display: block;
 }
 
 .buy-action {
@@ -393,6 +407,38 @@ button:disabled {
   color: rgba(242, 242, 242, 0.6);
   background: rgba(26, 30, 32, 0.62);
   font-size: 13px;
+}
+
+.blocking-error-panel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(245, 166, 35, 0.35);
+  border-radius: 8px;
+  color: rgba(242, 242, 242, 0.82);
+  background: rgba(245, 166, 35, 0.08);
+}
+
+.blocking-error-panel svg {
+  color: #f5a623;
+}
+
+.blocking-error-panel h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.blocking-error-panel p {
+  margin: 0 0 8px;
+  color: rgba(242, 242, 242, 0.68);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.blocking-error-panel p:last-child {
+  margin-bottom: 0;
 }
 
 .about-media {

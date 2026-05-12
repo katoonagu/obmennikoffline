@@ -16,7 +16,8 @@ describe('Mini App runtime config and auth bridge', () => {
       devUserId: undefined,
       telegramInitData: undefined,
     });
-    await expect(api.listActiveOrders()).resolves.toHaveLength(1);
+    await expect(api.listActiveOrders()).resolves.toHaveLength(0);
+    await expect(api.listHistoryOrders()).resolves.toHaveLength(0);
   });
 
   it('uses VITE_MINIAPP_API_BASE_URL to select local API mode with dev user fallback', async () => {
@@ -49,6 +50,47 @@ describe('Mini App runtime config and auth bridge', () => {
 
     expect(config.mode).toBe('mock');
     expect(createMiniAppApiFromRuntimeConfig(config)).toBeTruthy();
+  });
+
+  it('rejects production or staging Mini App config that could run without Telegram auth', () => {
+    expect(() => loadMiniAppRuntimeConfig({
+      VITE_APP_ENV: 'production',
+      VITE_MINIAPP_API_MODE: 'mock',
+      VITE_MINIAPP_API_BASE_URL: 'https://api.example.test',
+    } as Record<string, string>)).toThrow('Production Mini App must use api mode');
+
+    expect(() => loadMiniAppRuntimeConfig({
+      VITE_APP_ENV: 'production',
+      VITE_MINIAPP_API_MODE: 'api',
+      VITE_MINIAPP_API_BASE_URL: 'https://api.example.test',
+      VITE_MINIAPP_DEV_USER_ID: 'dev-user-1',
+    } as Record<string, string>)).toThrow('VITE_MINIAPP_DEV_USER_ID is not allowed');
+
+    expect(() => loadMiniAppRuntimeConfig({
+      VITE_APP_ENV: 'staging',
+      VITE_MINIAPP_API_MODE: 'api',
+      VITE_MINIAPP_API_BASE_URL: 'https://api.example.test',
+    } as Record<string, string>)).toThrow('Telegram WebApp initData is required');
+
+    expect(loadMiniAppRuntimeConfig(
+      {
+        VITE_APP_ENV: 'production',
+        VITE_MINIAPP_API_MODE: 'api',
+        VITE_MINIAPP_API_BASE_URL: 'https://api.example.test/',
+      } as Record<string, string>,
+      {
+        Telegram: {
+          WebApp: {
+            initData: ' signed-init-data ',
+          },
+        },
+      },
+    )).toEqual({
+      mode: 'api',
+      apiBaseUrl: 'https://api.example.test',
+      devUserId: undefined,
+      telegramInitData: 'signed-init-data',
+    });
   });
 
   it('uses Telegram WebApp initData authorization instead of dev user fallback', async () => {

@@ -224,6 +224,39 @@ describe('orderApplicationService', () => {
     expect(tx.depositAddress.updateMany).toHaveBeenCalledTimes(2);
   });
 
+  it('throws and creates no SELL order when every reservation attempt loses the race', async () => {
+    const tx = createTx({
+      candidates: [
+        { id: 'addr-1', derivationIndex: 1, status: 'available' },
+        { id: 'addr-2', derivationIndex: 2, status: 'available' },
+      ],
+      updateCounts: [0, 0],
+    });
+    const db = createDb(tx);
+
+    await expect(
+      createSellUsdtOrderInDb(db, {
+        publicId: 'E74741',
+        userId: 'user-1',
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+        amountUsdt: '5000.000000',
+        amountRub: '381250.00',
+        rateSnapshot: '76.250000',
+        now: NOW,
+        rateTtlMinutes: 20,
+        orderTtlMinutes: 60,
+        maxReservationAttempts: 2,
+      }),
+    ).rejects.toThrow('failed to reserve TRON deposit address after concurrent attempts');
+
+    expect(tx.depositAddress.findFirst).toHaveBeenCalledTimes(2);
+    expect(tx.depositAddress.updateMany).toHaveBeenCalledTimes(2);
+    expect(tx.order.create).not.toHaveBeenCalled();
+    expect(tx.user.upsert).not.toHaveBeenCalled();
+  });
+
   it('throws when no SELL deposit address is available', async () => {
     const tx = createTx({ candidates: [null] });
     const db = createDb(tx);

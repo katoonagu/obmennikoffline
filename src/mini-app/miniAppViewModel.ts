@@ -80,6 +80,8 @@ export function createMiniAppHomeViewModel(input: {
 export function createMiniAppOrderDetailViewModel(
   order: OrderDto,
 ): MiniAppOrderDetailViewModel {
+  const sellDepositAddress =
+    order.direction === 'SELL_USDT' ? order.depositAddress : null;
   const rows: MiniAppDetailRowViewModel[] = [
     {
       label: 'ID заявки',
@@ -105,10 +107,10 @@ export function createMiniAppOrderDetailViewModel(
     },
   ];
 
-  if (order.depositAddress) {
+  if (sellDepositAddress) {
     rows.push({
       label: 'Адрес для перевода (TRC-20)',
-      value: order.depositAddress,
+      value: sellDepositAddress,
       tone: 'mono',
       copyable: true,
     });
@@ -142,7 +144,7 @@ export function createMiniAppOrderDetailViewModel(
     publicId: order.publicId,
     statusLabel: status.label,
     statusTone: status.tone,
-    qrValue: order.depositAddress,
+    qrValue: sellDepositAddress,
     rows,
     primaryAmountLabel: getOrderPrimaryAmount(order),
     directionLabel: getOrderDirectionLabel(order),
@@ -205,7 +207,7 @@ function getOrderCardAddress(order: OrderDto): Pick<
   MiniAppOrderCardViewModel,
   'addressLabel' | 'addressValue'
 > {
-  if (order.depositAddress) {
+  if (order.direction === 'SELL_USDT' && order.depositAddress) {
     return {
       addressLabel: 'Адрес (TRC-20)',
       addressValue: order.depositAddress,

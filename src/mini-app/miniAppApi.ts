@@ -40,6 +40,7 @@ export interface MiniAppSellOrderInput {
 export interface MiniAppApi {
   loadRates(): Promise<UsdtRubRates>;
   listActiveOrders(input?: { limit?: number }): Promise<OrderDto[]>;
+  listHistoryOrders(input?: { limit?: number }): Promise<OrderDto[]>;
   getOrder(publicId: string): Promise<OrderDto>;
   getProfile(): Promise<UserProfileDto>;
   createBuyOrder(input: MiniAppBuyOrderInput): Promise<OrderDto>;
@@ -68,6 +69,7 @@ export class MiniAppApiError extends Error {
 const routes = {
   rates: findPublicPath('GET', '/api/rates/usdt-rub'),
   activeOrders: findPublicPath('GET', '/api/orders/active'),
+  historyOrders: findPublicPath('GET', '/api/orders/history'),
   orderDetail: findPublicPath('GET', '/api/orders/:publicId'),
   profile: findPublicPath('GET', '/api/profile'),
   buyOrder: findPublicPath('POST', '/api/orders/buy'),
@@ -77,6 +79,14 @@ const routes = {
 const MOCK_NOW = new Date('2026-05-11T11:05:00.000Z');
 const MOCK_DEPOSIT_ADDRESS = 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY';
 const MOCK_PAYOUT_ADDRESS = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
+const MOCK_DEPOSIT_ADDRESS_POOL = [
+  'TWer2Ygk5TEheHp3TPuYeqxmB6SsGZmaL6',
+  'TPjjvMwjPoDC32V2dGDYTkLH4E5LAtBZ6C',
+  'TB7mhtkvfhsRBRhe5FuRa4tFXSEyGDe4eA',
+  'TEb822rMZ5QkYReuqdqK61zkheaan97PZZ',
+  'TYc2iBENTQ7kwx5jbjW3JDqugR7kogQZn3',
+  'TNWtoufpsNepTJdNzbcimHrPEUSHLDCJE1',
+] as const;
 const MOCK_CUSTOMER = {
   lastName: 'Ivanov',
   firstName: 'Ivan',
@@ -160,6 +170,17 @@ export function createMiniAppApiClient(
       return parseJsonResponse(response, ordersResponseSchema).then((payload) => payload.orders);
     },
 
+    async listHistoryOrders(input = {}) {
+      const response = await request(buildUrl(options, routes.historyOrders, {
+        userId: options.telegramInitData ? undefined : options.devUserId,
+        limit: input.limit?.toString(),
+      }), {
+        method: 'GET',
+        headers: buildHeaders(options),
+      });
+      return parseJsonResponse(response, ordersResponseSchema).then((payload) => payload.orders);
+    },
+
     async getOrder(publicId) {
       const response = await request(buildUrl(
         options,
@@ -226,9 +247,12 @@ export function createMiniAppApiClient(
 }
 
 export function createMockMiniAppApi(): MiniAppApi {
-  const orders = [miniAppMockFixtures.sellOrder];
-  let nextOrderNumber = 2;
-  let profileCustomer: UserProfileDto['customer'] = miniAppMockFixtures.profile.customer;
+  const orders: OrderDto[] = [];
+  const historyOrders: OrderDto[] = [];
+  let nextSellOrderNumber = 1;
+  let nextBuyOrderNumber = 97010;
+  let nextDepositAddressIndex = 0;
+  let profileCustomer: UserProfileDto['customer'] = null;
 
   return {
     async loadRates() {
@@ -249,8 +273,12 @@ export function createMockMiniAppApi(): MiniAppApi {
       return validateApiResponse(ordersResponseSchema, { orders }).orders;
     },
 
+    async listHistoryOrders() {
+      return validateApiResponse(ordersResponseSchema, { orders: historyOrders }).orders;
+    },
+
     async getOrder(publicId) {
-      const order = orders.find((candidate) => candidate.publicId === publicId);
+      const order = [...orders, ...historyOrders].find((candidate) => candidate.publicId === publicId);
       if (!order) {
         throw new MiniAppApiError('order not found', 404, {
           error: 'not_found',
@@ -267,6 +295,7 @@ export function createMockMiniAppApi(): MiniAppApi {
           customer: profileCustomer,
           stats: {
             ...miniAppMockFixtures.profile.stats,
+            totalOrders: orders.length,
             activeOrders: orders.length,
           },
         },
@@ -288,7 +317,7 @@ export function createMockMiniAppApi(): MiniAppApi {
         rates: miniAppMockFixtures.rates,
       });
       const order = createMockOrder({
-        publicId: 'E97010',
+        publicId: formatMockOrderId(nextBuyOrderNumber++),
         direction: 'BUY_USDT',
         customer: input.customer,
         amountUsdt: quote.amountUsdt,
@@ -318,14 +347,14 @@ export function createMockMiniAppApi(): MiniAppApi {
         rates: miniAppMockFixtures.rates,
       });
       const order = createMockOrder({
-        publicId: `E0000${nextOrderNumber++}`,
+        publicId: formatMockOrderId(nextSellOrderNumber++),
         direction: 'SELL_USDT',
         customer: input.customer,
         amountUsdt: quote.amountUsdt,
         amountRub: quote.amountRub,
         rateSnapshot: quote.rateSnapshot,
         status: 'awaiting_deposit',
-        depositAddress: MOCK_DEPOSIT_ADDRESS,
+        depositAddress: getNextMockDepositAddress(nextDepositAddressIndex++),
         clientPayoutAddress: null,
         createdAt: MOCK_NOW,
       });
@@ -334,6 +363,14 @@ export function createMockMiniAppApi(): MiniAppApi {
       return validateApiResponse(orderResponseSchema, { order }).order;
     },
   };
+}
+
+function getNextMockDepositAddress(index: number): string {
+  return MOCK_DEPOSIT_ADDRESS_POOL[index % MOCK_DEPOSIT_ADDRESS_POOL.length];
+}
+
+function formatMockOrderId(value: number): string {
+  return `E${value.toString().padStart(5, '0')}`;
 }
 
 function findPublicPath(method: 'GET' | 'POST', path: string): string {
@@ -388,10 +425,48 @@ async function parseJsonResponse<T>(
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new MiniAppApiError('Mini App API request failed', response.status, payload);
+    throw new MiniAppApiError(
+      getMiniAppApiErrorMessage(payload),
+      response.status,
+      payload,
+    );
   }
 
   return validateApiResponse(schema, payload);
+}
+
+function getMiniAppApiErrorMessage(payload: unknown): string {
+  if (!isRecord(payload)) {
+    return 'Mini App API request failed';
+  }
+
+  if (payload.error === 'address_pool_unavailable') {
+    return 'Нет свободных TRC-20 адресов. Попробуйте позже или напишите в поддержку.';
+  }
+
+  if (
+    payload.error === 'telegram_auth_invalid' ||
+    payload.error === 'telegram_init_data_invalid'
+  ) {
+    return 'Авторизация Telegram устарела. Откройте приложение заново из Telegram.';
+  }
+
+  if (typeof payload.message === 'string' && payload.message.trim()) {
+    return payload.message.trim();
+  }
+
+  if (Array.isArray(payload.issues)) {
+    const firstIssue = payload.issues.find(isRecord);
+    if (firstIssue && typeof firstIssue.message === 'string' && firstIssue.message.trim()) {
+      return firstIssue.message.trim();
+    }
+  }
+
+  return 'Mini App API request failed';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function createMockOrder(input: {

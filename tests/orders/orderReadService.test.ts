@@ -204,6 +204,28 @@ describe('orderReadService', () => {
     ]);
   });
 
+  it('renders legacy blank order FIO explicitly instead of silent empty fields', async () => {
+    const db = createDb({
+      orders: [
+        createOrderRecord({
+          customerLastName: '',
+          customerFirstName: '',
+          customerMiddleName: '',
+        }),
+      ],
+    });
+
+    await expect(listActiveOrders(db, { userId: 'user-1' })).resolves.toMatchObject([
+      {
+        customer: {
+          lastName: 'ФИО не указано',
+          firstName: 'legacy-заявка',
+          middleName: 'требуется backfill',
+        },
+      },
+    ]);
+  });
+
   it('pads database decimals to API DTO scale even when Decimal.toString trims zeros', async () => {
     const db = createDb({
       orders: [

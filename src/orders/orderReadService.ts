@@ -166,6 +166,11 @@ interface UserFindUniqueInput {
 }
 
 const DEFAULT_LIST_LIMIT = 20;
+const LEGACY_ORDER_CUSTOMER_PLACEHOLDER = {
+  lastName: 'ФИО не указано',
+  firstName: 'legacy-заявка',
+  middleName: 'требуется backfill',
+};
 const MAX_LIST_LIMIT = 100;
 
 const ORDER_READ_SELECT = {
@@ -390,11 +395,7 @@ function toOrderDto(order: ReadableOrderRecord): OrderDto {
     direction: order.direction,
     asset: order.asset,
     network: order.network,
-    customer: {
-      lastName: order.customerLastName,
-      firstName: order.customerFirstName,
-      middleName: order.customerMiddleName,
-    },
+    customer: toOrderCustomerDto(order),
     amountUsdt: toNullableDecimalString(order.amountUsdt, 6, 'amountUsdt'),
     amountRub: toNullableDecimalString(order.amountRub, 2, 'amountRub'),
     rateSnapshot: toRequiredDecimalString(order.rateSnapshot, 6, 'rateSnapshot'),
@@ -407,6 +408,22 @@ function toOrderDto(order: ReadableOrderRecord): OrderDto {
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     completedAt: order.completedAt?.toISOString() ?? null,
+  };
+}
+
+function toOrderCustomerDto(order: ReadableOrderRecord): OrderDto['customer'] {
+  if (
+    !order.customerLastName.trim() ||
+    !order.customerFirstName.trim() ||
+    !order.customerMiddleName.trim()
+  ) {
+    return LEGACY_ORDER_CUSTOMER_PLACEHOLDER;
+  }
+
+  return {
+    lastName: order.customerLastName,
+    firstName: order.customerFirstName,
+    middleName: order.customerMiddleName,
   };
 }
 

@@ -77,6 +77,28 @@ const navItems: Array<{ id: MiniAppScreenId; label: string; icon: LucideIcon }> 
   { id: 'profile', label: 'Профиль', icon: User },
 ];
 
+const initialProfile: UserProfileDto = {
+  userId: '',
+  customer: null,
+  telegram: null,
+  stats: {
+    totalOrders: 0,
+    activeOrders: 0,
+  },
+};
+
+type BrowserMiniAppRuntimeState =
+  | {
+      api: MiniAppApi;
+      isApiMode: boolean;
+      errorMessage?: undefined;
+    }
+  | {
+      api: null;
+      isApiMode: true;
+      errorMessage: string;
+    };
+
 function getScreen(id: MiniAppScreenId): MiniAppScreen {
   const screen = screenById.get(id);
 
@@ -87,20 +109,40 @@ function getScreen(id: MiniAppScreenId): MiniAppScreen {
   return screen;
 }
 
+function createBrowserMiniAppRuntimeState(): BrowserMiniAppRuntimeState {
+  try {
+    const config = loadBrowserMiniAppRuntimeConfig();
+
+    return {
+      api: createMiniAppApiFromRuntimeConfig(config),
+      isApiMode: config.mode === 'api',
+    };
+  } catch (error) {
+    return {
+      api: null,
+      isApiMode: true,
+      errorMessage: error instanceof Error
+        ? error.message
+        : 'Mini App runtime config is invalid',
+    };
+  }
+}
+
 export function App() {
   const [activeScreenId, setActiveScreenId] = useState<MiniAppScreenId>('home');
-  const [api] = useState<MiniAppApi>(() =>
-    createMiniAppApiFromRuntimeConfig(loadBrowserMiniAppRuntimeConfig()),
+  const [runtimeState] = useState<BrowserMiniAppRuntimeState>(() =>
+    createBrowserMiniAppRuntimeState(),
   );
+  const api = runtimeState.api;
   const [rates, setRates] = useState<UsdtRubRates>(miniAppMockFixtures.rates);
-  const [activeOrders, setActiveOrders] = useState<OrderDto[]>([
-    miniAppMockFixtures.sellOrder,
-  ]);
-  const [selectedOrder, setSelectedOrder] = useState<OrderDto | null>(
-    miniAppMockFixtures.sellOrder,
-  );
-  const [profile, setProfile] = useState<UserProfileDto>(miniAppMockFixtures.profile);
+  const [activeOrders, setActiveOrders] = useState<OrderDto[]>([]);
+  const [historyOrders, setHistoryOrders] = useState<OrderDto[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<OrderDto | null>(null);
+  const [profile, setProfile] = useState<UserProfileDto>(initialProfile);
   const [loadingLabel, setLoadingLabel] = useState('Загрузка данных');
+  const [bootstrapError, setBootstrapError] = useState<string | undefined>(
+    runtimeState.errorMessage,
+  );
   const [buyForm, setBuyForm] = useState<BuyOrderFormState>(() =>
     createInitialBuyOrderForm(),
   );
@@ -127,15 +169,24 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
 
+    if (!api) {
+      setLoadingLabel('');
+      return () => {
+        cancelled = true;
+      };
+    }
+
     Promise.all([
       api.loadRates(),
       api.listActiveOrders({ limit: 5 }),
+      api.listHistoryOrders({ limit: 10 }),
       api.getProfile(),
     ])
-      .then(([loadedRates, loadedOrders, loadedProfile]) => {
+      .then(([loadedRates, loadedOrders, loadedHistoryOrders, loadedProfile]) => {
         if (cancelled) return;
         setRates(loadedRates);
         setActiveOrders(loadedOrders);
+        setHistoryOrders(loadedHistoryOrders);
         setSelectedOrder(loadedOrders[0] ?? null);
         setProfile(loadedProfile);
         setBuyForm((form) => mergeCustomerIntoBuyOrderForm(form, loadedProfile.customer));
@@ -144,6 +195,17 @@ export function App() {
       })
       .catch(() => {
         if (!cancelled) {
+          setActiveOrders([]);
+          setHistoryOrders([]);
+          setSelectedOrder(null);
+          setProfile(initialProfile);
+
+          if (runtimeState.isApiMode) {
+            setLoadingLabel('');
+            setBootstrapError('Не удалось загрузить данные Mini App. Откройте приложение заново из Telegram или попробуйте позже.');
+            return;
+          }
+
           setLoadingLabel('Не удалось обновить данные');
         }
       });
@@ -151,7 +213,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [api]);
+  }, [api, runtimeState.isApiMode]);
 
   useEffect(() => {
     screenScrollRef.current?.scrollTo({ top: 0 });
@@ -198,6 +260,11 @@ export function App() {
   }
 
   async function handleCreateBuyOrder() {
+    if (!api) {
+      setBootstrapError('Mini App API недоступен. Откройте приложение заново из Telegram.');
+      return;
+    }
+
     const result = buildBuyOrderInput(buyForm);
     if (!result.ok) {
       setSubmissionError(result.message);
@@ -213,6 +280,11 @@ export function App() {
   }
 
   async function handleCreateSellOrder() {
+    if (!api) {
+      setBootstrapError('Mini App API недоступен. Откройте приложение заново из Telegram.');
+      return;
+    }
+
     const result = buildSellOrderInput(sellForm);
     if (!result.ok) {
       setSubmissionError(result.message);
@@ -228,11 +300,17 @@ export function App() {
   }
 
   async function refreshAfterCreatedOrder(order: OrderDto) {
-    const [loadedOrders, loadedProfile] = await Promise.all([
+    if (!api) {
+      throw new Error('Mini App API unavailable');
+    }
+
+    const [loadedOrders, loadedHistoryOrders, loadedProfile] = await Promise.all([
       api.listActiveOrders({ limit: 5 }),
+      api.listHistoryOrders({ limit: 10 }),
       api.getProfile(),
     ]);
     setActiveOrders(loadedOrders);
+    setHistoryOrders(loadedHistoryOrders);
     setSelectedOrder(order);
     setProfile(loadedProfile);
     setBuyForm((form) => mergeCustomerIntoBuyOrderForm(form, loadedProfile.customer));
@@ -270,6 +348,10 @@ export function App() {
 
         <section className="screen-scroll" ref={screenScrollRef}>
           {loadingLabel && <div className="sync-banner">{loadingLabel}</div>}
+          {bootstrapError ? (
+            <BlockingErrorScreen message={bootstrapError} />
+          ) : (
+            <>
           {activeScreen.id === 'home' && (
             <HomeScreen
               model={homeModel}
@@ -349,8 +431,8 @@ export function App() {
             />
           )}
           {activeScreen.id === 'history' && (
-            <HistoryScreen activeOrders={activeOrders} onOpenOrder={(publicId) => {
-              const order = activeOrders.find((candidate) => candidate.publicId === publicId);
+            <HistoryScreen orders={historyOrders} onOpenOrder={(publicId) => {
+              const order = historyOrders.find((candidate) => candidate.publicId === publicId);
               setSelectedOrder(order ?? null);
               setActiveScreenId('order-detail');
             }} />
@@ -358,11 +440,28 @@ export function App() {
           {activeScreen.id === 'profile' && (
             <ProfileScreen screen={activeScreen} model={profileModel} />
           )}
+            </>
+          )}
         </section>
 
         <BottomNav activeScreenId={activeScreenId} onNavigate={setActiveScreenId} />
       </section>
     </main>
+  );
+}
+
+function BlockingErrorScreen({ message }: { message: string }) {
+  return (
+    <div className="screen-stack">
+      <section className="blocking-error-panel" role="alert">
+        <ShieldCheck size={26} />
+        <div>
+          <h2>Mini App недоступен</h2>
+          <p>{message}</p>
+          <p>Платежные реквизиты и QR-коды не показываются без успешной авторизации.</p>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -932,19 +1031,19 @@ function OrderDetailScreen({
 }
 
 function HistoryScreen({
-  activeOrders,
+  orders,
   onOpenOrder,
 }: {
-  activeOrders: OrderDto[];
+  orders: OrderDto[];
   onOpenOrder: (publicId: string) => void;
 }) {
   return (
     <div className="screen-stack">
       <p className="screen-eyebrow">Закрытые заявки появятся после завершения обменов.</p>
       <section className="section-block">
-        <h3>Текущие заявки</h3>
-        {activeOrders.length > 0 ? (
-          activeOrders.map((order) => {
+        <h3>Завершенные заявки</h3>
+        {orders.length > 0 ? (
+          orders.map((order) => {
             const card = createMiniAppHomeViewModel({
               rates: miniAppMockFixtures.rates,
               activeOrders: [order],
@@ -958,7 +1057,7 @@ function HistoryScreen({
             );
           })
         ) : (
-          <div className="empty-panel">Заявок пока нет</div>
+          <div className="empty-panel">Закрытых заявок пока нет</div>
         )}
       </section>
     </div>
@@ -1184,9 +1283,7 @@ function HelpSection({
 function QrCodePanel({ address }: { address: string }) {
   return (
     <div className="qr-panel">
-      <span>Отправьте USDT на адрес ниже</span>
       <QrCodeImage value={address} />
-      <AddressLine label="Адрес для перевода (TRC-20)" value={address} />
     </div>
   );
 }
