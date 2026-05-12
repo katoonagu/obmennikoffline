@@ -125,6 +125,13 @@ describe('Mini App Figma component style contract', () => {
     expect(appSource).toContain('<BlockingErrorScreen message={bootstrapError}');
   });
 
+  it('explains local API dev-auth setup when local API mode cannot bootstrap', () => {
+    expect(appSource).toContain('createMiniAppBootstrapFailureMessage');
+    expect(appSource).toContain('Не удалось подключиться к локальному API');
+    expect(appSource).toContain('MINIAPP_DEV_AUTH_ENABLED=true');
+    expect(appSource).toContain('MINIAPP_CORS_ORIGINS=http://127.0.0.1:5173');
+  });
+
   it('centers action cards as compact tap targets instead of floating icons high', () => {
     expect(appCss).toMatch(
       /\.action-card\s*{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*center;/,

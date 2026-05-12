@@ -329,8 +329,18 @@ VITE_APP_ENV="local"
 VITE_MINIAPP_API_MODE="mock"
 ```
 
-To point it at the local Fastify API, start `pnpm dev:api`, then restart the
-Vite dev server with public browser config:
+To point it at the local Fastify API, start the API with dev-user auth and exact
+local CORS, then restart the Vite dev server with public browser config:
+
+```powershell
+$env:MINIAPP_DEV_AUTH_ENABLED="true"; $env:MINIAPP_CORS_ORIGINS="http://127.0.0.1:5173"; $env:HOST="127.0.0.1"; $env:PORT="3000"; pnpm dev:api
+```
+
+```powershell
+$env:VITE_APP_ENV="local"; $env:VITE_MINIAPP_API_MODE="api"; $env:VITE_MINIAPP_API_BASE_URL="http://127.0.0.1:3000"; $env:VITE_MINIAPP_DEV_USER_ID="dev-user-1"; pnpm dev:miniapp
+```
+
+The same values can also be placed in local/private shell env:
 
 ```env
 MINIAPP_CORS_ORIGINS="http://127.0.0.1:5173"

@@ -91,11 +91,13 @@ type BrowserMiniAppRuntimeState =
   | {
       api: MiniAppApi;
       isApiMode: boolean;
+      isLocalDevAuth: boolean;
       errorMessage?: undefined;
     }
   | {
       api: null;
       isApiMode: true;
+      isLocalDevAuth: false;
       errorMessage: string;
     };
 
@@ -116,11 +118,13 @@ function createBrowserMiniAppRuntimeState(): BrowserMiniAppRuntimeState {
     return {
       api: createMiniAppApiFromRuntimeConfig(config),
       isApiMode: config.mode === 'api',
+      isLocalDevAuth: config.mode === 'api' && config.devUserId !== undefined,
     };
   } catch (error) {
     return {
       api: null,
       isApiMode: true,
+      isLocalDevAuth: false,
       errorMessage: error instanceof Error
         ? error.message
         : 'Mini App runtime config is invalid',
@@ -202,7 +206,7 @@ export function App() {
 
           if (runtimeState.isApiMode) {
             setLoadingLabel('');
-            setBootstrapError('Не удалось загрузить данные Mini App. Откройте приложение заново из Telegram или попробуйте позже.');
+            setBootstrapError(createMiniAppBootstrapFailureMessage(runtimeState));
             return;
           }
 
@@ -448,6 +452,16 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function createMiniAppBootstrapFailureMessage(
+  runtimeState: BrowserMiniAppRuntimeState,
+): string {
+  if (runtimeState.isLocalDevAuth) {
+    return 'Не удалось подключиться к локальному API. Запустите Fastify API на http://127.0.0.1:3000 с MINIAPP_DEV_AUTH_ENABLED=true и MINIAPP_CORS_ORIGINS=http://127.0.0.1:5173, затем обновите Mini App.';
+  }
+
+  return 'Не удалось загрузить данные Mini App. Откройте приложение заново из Telegram или попробуйте позже.';
 }
 
 function BlockingErrorScreen({ message }: { message: string }) {
