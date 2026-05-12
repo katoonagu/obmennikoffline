@@ -38,6 +38,7 @@ describe('Mini App Figma component style contract', () => {
     for (const selector of [
       '.ui-field',
       '.ui-input',
+      '.ui-field-helper',
       '.ui-button.primary',
       '.ui-button.secondary',
       '.ui-button.tertiary',
@@ -65,6 +66,8 @@ describe('Mini App Figma component style contract', () => {
     expect(appSource).toContain('className="ui-field"');
     expect(appSource).toContain('className="ui-button primary"');
     expect(appSource).toContain('ui-copy-button');
+    expect(appSource).toContain('helperText');
+    expect(appSource).toContain('aria-describedby');
   });
 
   it('gives copy buttons an accessible copied state after clipboard writes', () => {
@@ -74,5 +77,27 @@ describe('Mini App Figma component style contract', () => {
     expect(appSource).toContain('Скопировано');
     expect(appCss).toContain('.ui-copy-button.copied');
     expect(appCss).toContain('.copy-feedback');
+  });
+
+  it('keeps the exchar-style flow structure in OBMEN dark components', () => {
+    for (const selector of [
+      '.home-rate-header',
+      '.exchange-rate-table',
+      '.order-card-kicker',
+      '.order-card-address',
+      '.created-order-hero',
+      '.created-order-summary',
+      '.sell-transfer-panel',
+      '.buy-instructions-panel',
+      '.profile-identity-panel',
+    ]) {
+      expect(appCss).toContain(selector);
+    }
+
+    expect(appSource).toContain('className="exchange-rate-table"');
+    expect(appSource).toContain('className="created-order-hero"');
+    expect(appSource).toContain('className="sell-transfer-panel"');
+    expect(appSource).toContain('className="buy-instructions-panel"');
+    expect(appSource).toContain('className="profile-identity-panel"');
   });
 });

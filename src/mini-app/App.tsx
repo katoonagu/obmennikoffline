@@ -21,7 +21,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { OrderDto, UserProfileDto } from '../orders/orderReadService.js';
 import {
   createUsdtRubOrderQuote,
@@ -57,6 +57,7 @@ import {
   createMiniAppProfileViewModel,
   type MiniAppDetailRowViewModel,
   type MiniAppHomeViewModel,
+  type MiniAppOrderCardViewModel,
   type MiniAppOrderDetailViewModel,
   type MiniAppProfileViewModel,
 } from './miniAppViewModel.js';
@@ -431,10 +432,16 @@ function HomeScreen({
         </button>
       </div>
 
-      <div className="rate-strip">
-        <RateCell row={{ label: 'Купить', value: model.rates.buy, tone: 'accent' }} />
-        <RateCell row={{ label: 'Продать', value: model.rates.sell, tone: 'cyan' }} />
-      </div>
+      <section className="home-rate-card" aria-labelledby="current-rate-title">
+        <div className="home-rate-header">
+          <h3 id="current-rate-title">Актуальный курс USDT</h3>
+          <span>Tron (TRC-20)</span>
+        </div>
+        <div className="exchange-rate-table">
+          <RateCell row={{ label: 'Купить', value: model.rates.buy, tone: 'accent' }} />
+          <RateCell row={{ label: 'Продать', value: model.rates.sell, tone: 'cyan' }} />
+        </div>
+      </section>
 
       <section className="section-block" aria-labelledby="active-orders-title">
         <div className="section-heading-row">
@@ -445,26 +452,44 @@ function HomeScreen({
         </div>
         {model.activeOrders.length > 0 ? (
           model.activeOrders.map((order) => (
-            <button
-              className="order-card"
-              type="button"
+            <OrderCardButton
               key={order.publicId}
-              onClick={() => onOpenOrder(order.publicId)}
-            >
-              <span className="order-card-title">{order.title}</span>
-              <span className={`status-badge tone-${order.statusTone}`}>
-                {order.statusLabel}
-              </span>
-              <span className="order-card-meta">ID: {order.publicId}</span>
-              <span className="order-card-meta">{order.createdAtLabel}</span>
-              <ChevronRight className="order-card-chevron" size={18} />
-            </button>
+              order={order}
+              onOpen={() => onOpenOrder(order.publicId)}
+            />
           ))
         ) : (
           <div className="empty-panel">Активных заявок нет</div>
         )}
       </section>
     </div>
+  );
+}
+
+function OrderCardButton({
+  order,
+  onOpen,
+}: {
+  order: MiniAppOrderCardViewModel;
+  onOpen: () => void;
+}) {
+  return (
+    <button className="order-card" type="button" onClick={onOpen}>
+      <span className="order-card-kicker">{order.directionLabel}</span>
+      <span className={`status-badge tone-${order.statusTone}`}>
+        {order.statusLabel}
+      </span>
+      <span className="order-card-title">{order.amountLabel}</span>
+      <span className="order-card-meta">ID: {order.publicId}</span>
+      {order.addressValue && (
+        <span className="order-card-address">
+          <span>{order.addressLabel}</span>
+          <strong>{order.addressValue}</strong>
+        </span>
+      )}
+      <span className="order-card-meta">{order.createdAtLabel}</span>
+      <ChevronRight className="order-card-chevron" size={18} />
+    </button>
   );
 }
 
@@ -526,18 +551,20 @@ function BuyFormScreen({
         value={form.amountRub}
         inputMode="decimal"
         placeholder="200 000"
+        helperText="Минимальная сумма и итоговый расчет появятся на следующем шаге"
         onChange={(amountRub) => onChange({ ...form, amountRub })}
       />
-      <NameFields form={form} onChange={onChange} />
       <FormField
         label="Кошелек для получения (TRC-20)"
         value={form.clientPayoutAddress}
         inputMode="text"
         placeholder="T..."
+        helperText="Введите полный адрес без сокращений, USDT будут отправлены на него после оплаты"
         onChange={(clientPayoutAddress) =>
           onChange({ ...form, clientPayoutAddress })
         }
       />
+      <NameFields form={form} onChange={onChange} />
       <HelpSection highlights={screen.highlights} tone="accent" />
       {errorMessage && <p className="form-error">{errorMessage}</p>}
       <Button
@@ -580,6 +607,7 @@ function SellFormScreen({
         value={form.amountUsdt}
         inputMode="decimal"
         placeholder="5 000"
+        helperText="Адрес для перевода будет зарезервирован после создания заявки"
         onChange={(amountUsdt) => onChange({ ...form, amountUsdt })}
       />
       <NameFields form={form} onChange={onChange} />
@@ -805,18 +833,27 @@ function CreatedOrderScreen({
   return (
     <div className="screen-stack">
       <p className="screen-eyebrow">{screen.eyebrow}</p>
-      <div className="success-panel">
+      <div className="created-order-hero">
         <CheckCircle2 size={22} />
         <strong>{screen.title}</strong>
+        <span className="created-order-summary">{model.primaryAmountLabel}</span>
       </div>
       <PaymentIdSection publicId={order.publicId} />
       {mode === 'sell' && order.depositAddress ? (
-        <QrCodePanel address={order.depositAddress} />
+        <section className="sell-transfer-panel" aria-label="Адрес для перевода USDT">
+          <QrCodePanel address={order.depositAddress} />
+        </section>
       ) : (
-        <div className="qr-panel text-panel">
+        <section className="buy-instructions-panel" aria-label="Инструкция для покупки USDT">
           <Building2 size={22} />
           <span>Приходите в офис с RUB. USDT отправляется на ваш кошелек после оплаты.</span>
-        </div>
+          {order.clientPayoutAddress && (
+            <AddressLine
+              label="Кошелек для получения (TRC-20)"
+              value={order.clientPayoutAddress}
+            />
+          )}
+        </section>
       )}
       <div className="field-stack">
         <DataPanel row={{ label: model.directionLabel, value: model.primaryAmountLabel, tone: 'mono' }} />
@@ -873,12 +910,14 @@ function OrderDetailScreen({
       }} />
 
       {model.qrValue ? (
-        <QrCodePanel address={model.qrValue} />
+        <section className="sell-transfer-panel" aria-label="Адрес для перевода USDT">
+          <QrCodePanel address={model.qrValue} />
+        </section>
       ) : (
-        <div className="qr-panel text-panel">
+        <section className="buy-instructions-panel" aria-label="Инструкция для покупки USDT">
           <Info size={22} />
           <span>USDT будет отправлен на кошелек клиента после оплаты в офисе.</span>
-        </div>
+        </section>
       )}
 
       {model.rows.filter((row) => !isPromotedDetailRow(row, model)).map((row) => (
@@ -911,18 +950,11 @@ function HistoryScreen({
               activeOrders: [order],
             }).activeOrders[0];
             return (
-              <button
-                className="order-card"
-                type="button"
+              <OrderCardButton
                 key={card.publicId}
-                onClick={() => onOpenOrder(card.publicId)}
-              >
-                <span className="order-card-title">{card.title}</span>
-                <span className={`status-badge tone-${card.statusTone}`}>{card.statusLabel}</span>
-                <span className="order-card-meta">ID: {card.publicId}</span>
-                <span className="order-card-meta">{card.createdAtLabel}</span>
-                <ChevronRight className="order-card-chevron" size={18} />
-              </button>
+                order={card}
+                onOpen={() => onOpenOrder(card.publicId)}
+              />
             );
           })
         ) : (
@@ -950,12 +982,12 @@ function ProfileScreen({
 
   return (
     <div className="screen-stack">
-      <div className="profile-card">
+      <div className="profile-identity-panel">
         <div className="avatar">
           <User size={30} />
         </div>
         <div>
-          <span className="verified-line">
+          <span className="identity-line">
             <ShieldCheck size={16} />
             Telegram-профиль
           </span>
@@ -1025,6 +1057,7 @@ function FormField({
   value,
   inputMode,
   placeholder,
+  helperText,
   autoComplete,
   onChange,
 }: {
@@ -1032,20 +1065,29 @@ function FormField({
   value: string;
   inputMode: 'decimal' | 'text';
   placeholder?: string;
+  helperText?: string;
   autoComplete?: string;
   onChange: (value: string) => void;
 }) {
+  const inputId = useId();
+  const helperId = helperText ? `${inputId}-helper` : undefined;
+
   return (
-    <label className="ui-field">
+    <label className="ui-field" htmlFor={inputId}>
       <span>{label}</span>
       <input
+        id={inputId}
         className="ui-input"
         value={value}
         inputMode={inputMode}
         placeholder={placeholder}
         autoComplete={autoComplete ?? 'off'}
+        aria-describedby={helperId}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
+      {helperText && (
+        <span className="ui-field-helper" id={helperId}>{helperText}</span>
+      )}
     </label>
   );
 }

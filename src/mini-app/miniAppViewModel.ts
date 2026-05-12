@@ -4,7 +4,11 @@ import type { MiniAppTone } from './miniAppContent.js';
 
 export interface MiniAppOrderCardViewModel {
   publicId: string;
+  directionLabel: string;
+  amountLabel: string;
   title: string;
+  addressLabel?: string;
+  addressValue?: string;
   statusLabel: string;
   statusTone: MiniAppTone;
   createdAtLabel: string;
@@ -141,7 +145,7 @@ export function createMiniAppOrderDetailViewModel(
     qrValue: order.depositAddress,
     rows,
     primaryAmountLabel: getOrderPrimaryAmount(order),
-    directionLabel: order.direction === 'SELL_USDT' ? 'Продажа USDT' : 'Покупка USDT',
+    directionLabel: getOrderDirectionLabel(order),
   };
 }
 
@@ -165,10 +169,14 @@ export function createMiniAppProfileViewModel(
 
 function createOrderCardViewModel(order: OrderDto): MiniAppOrderCardViewModel {
   const status = formatOrderStatus(order.status);
+  const address = getOrderCardAddress(order);
 
   return {
     publicId: order.publicId,
+    directionLabel: getOrderDirectionLabel(order),
+    amountLabel: getOrderPrimaryAmount(order),
     title: getOrderCardTitle(order),
+    ...address,
     statusLabel: status.label,
     statusTone: status.tone,
     createdAtLabel: formatMoscowDateTime(order.createdAt),
@@ -187,6 +195,31 @@ function getOrderPrimaryAmount(order: OrderDto): string {
   return order.direction === 'SELL_USDT'
     ? `${formatDecimal(order.amountUsdt ?? '0', 2)} USDT`
     : `${formatRub(order.amountRub ?? '0.00')} ₽`;
+}
+
+function getOrderDirectionLabel(order: OrderDto): string {
+  return order.direction === 'SELL_USDT' ? 'Продажа USDT' : 'Покупка USDT';
+}
+
+function getOrderCardAddress(order: OrderDto): Pick<
+  MiniAppOrderCardViewModel,
+  'addressLabel' | 'addressValue'
+> {
+  if (order.depositAddress) {
+    return {
+      addressLabel: 'Адрес (TRC-20)',
+      addressValue: order.depositAddress,
+    };
+  }
+
+  if (order.clientPayoutAddress) {
+    return {
+      addressLabel: 'Кошелек (TRC-20)',
+      addressValue: order.clientPayoutAddress,
+    };
+  }
+
+  return {};
 }
 
 function formatOrderStatus(status: OrderDto['status']): {

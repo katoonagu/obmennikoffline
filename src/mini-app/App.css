@@ -227,6 +227,30 @@ button:disabled {
   background: linear-gradient(135deg, #0caec5, #12dcef);
 }
 
+.home-rate-card {
+  display: grid;
+  gap: 8px;
+}
+
+.home-rate-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home-rate-header h3 {
+  margin: 0;
+  color: #f2f2f2;
+  font-size: 14px;
+}
+
+.home-rate-header span {
+  color: rgba(242, 242, 242, 0.52);
+  font-size: 11px;
+}
+
+.exchange-rate-table,
 .rate-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -293,8 +317,8 @@ button:disabled {
   display: grid;
   grid-template-columns: 1fr auto;
   width: 100%;
-  min-height: 88px;
-  gap: 7px 12px;
+  min-height: 104px;
+  gap: 6px 12px;
   padding: 14px 34px 14px 14px;
   border: 1px solid rgba(223, 255, 217, 0.1);
   border-radius: 8px;
@@ -304,9 +328,37 @@ button:disabled {
   cursor: pointer;
 }
 
+.order-card-kicker {
+  color: rgba(242, 242, 242, 0.6);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .order-card-title {
+  grid-column: 1 / -1;
+  color: #f2f2f2;
   font-size: 13px;
+  font-weight: 800;
+}
+
+.order-card-address {
+  display: grid;
+  grid-column: 1 / -1;
+  min-width: 0;
+  gap: 3px;
+}
+
+.order-card-address span {
+  color: rgba(242, 242, 242, 0.5);
+  font-size: 11px;
+}
+
+.order-card-address strong {
+  color: rgba(242, 242, 242, 0.78);
+  font-size: 12px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .status-badge {
@@ -391,10 +443,17 @@ button:disabled {
   gap: 7px;
 }
 
-.ui-field > span {
+.ui-field > span:first-child {
   color: rgba(242, 242, 242, 0.72);
   font-size: 12px;
   font-weight: 700;
+}
+
+.ui-field-helper {
+  color: rgba(242, 242, 242, 0.46);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .ui-input {
@@ -640,6 +699,7 @@ button:disabled {
   transform: none;
 }
 
+.created-order-hero,
 .success-panel {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -652,14 +712,31 @@ button:disabled {
   background: rgba(51, 188, 101, 0.08);
 }
 
+.created-order-hero {
+  min-height: 84px;
+}
+
 .success-panel strong {
   color: #f2f2f2;
 }
 
-.success-panel span {
+.created-order-hero strong {
+  color: #f2f2f2;
+  font-size: 16px;
+}
+
+.success-panel span,
+.created-order-summary {
   grid-column: 2;
   color: rgba(242, 242, 242, 0.64);
   font-size: 12px;
+}
+
+.created-order-summary {
+  color: #33bc65;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .detail-status-row {
@@ -681,6 +758,35 @@ button:disabled {
   background: rgba(8, 13, 14, 0.62);
   color: rgba(242, 242, 242, 0.62);
   font-size: 12px;
+}
+
+.sell-transfer-panel,
+.buy-instructions-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.sell-transfer-panel .qr-panel {
+  border-color: rgba(18, 220, 239, 0.2);
+  background: rgba(8, 13, 14, 0.76);
+}
+
+.buy-instructions-panel {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  min-height: 96px;
+  padding: 14px;
+  border: 1px solid rgba(51, 188, 101, 0.24);
+  border-radius: 8px;
+  color: rgba(242, 242, 242, 0.76);
+  background: rgba(51, 188, 101, 0.07);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.buy-instructions-panel .address-line {
+  grid-column: 1 / -1;
+  background: rgba(8, 13, 14, 0.52);
 }
 
 .qr-image,
@@ -733,6 +839,7 @@ button:disabled {
   line-height: 1.4;
 }
 
+.profile-identity-panel,
 .profile-card {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -755,6 +862,7 @@ button:disabled {
   background: linear-gradient(135deg, #0b7251, #33bc65);
 }
 
+.identity-line,
 .verified-line {
   display: inline-flex;
   align-items: center;
@@ -764,6 +872,7 @@ button:disabled {
   font-weight: 700;
 }
 
+.profile-identity-panel strong,
 .profile-card strong {
   display: block;
   margin-top: 6px;

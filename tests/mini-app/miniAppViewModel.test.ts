@@ -20,12 +20,32 @@ describe('Mini App view models', () => {
     expect(home.activeOrders).toEqual([
       {
         publicId: 'E00001',
+        directionLabel: 'Продажа USDT',
+        amountLabel: '5 000.00 USDT',
         title: 'Продажа 5 000.00 USDT',
+        addressLabel: 'Адрес (TRC-20)',
+        addressValue: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
         statusLabel: 'В ожидании',
         statusTone: 'warning',
         createdAtLabel: '11 мая 2026, 14:05',
       },
     ]);
+  });
+
+  it('keeps full BUY payout wallets visible in Home cards when present', () => {
+    const home = createMiniAppHomeViewModel({
+      rates: miniAppMockFixtures.rates,
+      activeOrders: [miniAppMockFixtures.buyOrder],
+    });
+
+    expect(home.activeOrders[0]).toMatchObject({
+      publicId: 'E97010',
+      directionLabel: 'Покупка USDT',
+      amountLabel: '200 000 ₽',
+      addressLabel: 'Кошелек (TRC-20)',
+      addressValue: 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7',
+    });
+    expect(home.activeOrders[0]?.addressValue).not.toContain('...');
   });
 
   it('maps SELL order detail to deposit-address QR instructions', () => {
