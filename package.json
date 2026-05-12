@@ -10,6 +10,7 @@
     "dev:miniapp": "vite --config frontend/vite.config.ts --host 127.0.0.1",
     "build:miniapp": "vite build --config frontend/vite.config.ts",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "lint:types": "tsc -p tsconfig.json --noEmit",
     "prisma:generate": "prisma generate",

@@ -31,4 +31,10 @@ describe('package scripts', () => {
       'node dist/src/smoke/stagingSmokeCli.js',
     );
   });
+
+  it('keeps PostgreSQL integration tests in an explicit script', () => {
+    expect(packageJson.scripts['test:integration']).toBe(
+      'vitest run --config vitest.integration.config.ts',
+    );
+  });
 });
