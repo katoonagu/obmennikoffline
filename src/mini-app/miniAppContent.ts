@@ -1,8 +1,14 @@
 export type MiniAppScreenId =
   | 'home'
+  | 'about'
   | 'buy'
+  | 'buy-confirm'
+  | 'buy-created'
   | 'sell'
+  | 'sell-confirm'
+  | 'sell-created'
   | 'order-detail'
+  | 'history'
   | 'profile';
 
 export type MiniAppTone = 'default' | 'accent' | 'cyan' | 'warning' | 'mono';
@@ -55,70 +61,109 @@ export const miniAppScreens: MiniAppScreen[] = [
     highlights: ['Офлайн обмен в офисе', 'Безопасные расчеты'],
   },
   {
+    id: 'about',
+    title: 'О нас',
+    eyebrow: 'OBMEN работает с наличными расчетами в офисе.',
+    rows: [
+      { label: 'Контакты', value: 'Офис и график' },
+      { label: 'Чат поддержки', value: 'Telegram' },
+      { label: 'Реферальная система', value: 'Скоро' },
+      { label: 'Политика конфиденциальности', value: 'Открыть' },
+      { label: 'AML/KYC/KYT', value: 'Правила' },
+    ],
+    highlights: ['Поддержка менеджера после создания заявки'],
+  },
+  {
     id: 'buy',
     title: 'Купить USDT',
     eyebrow: 'Вы отдаете рубли, мы отправляем USDT на ваш TRC-20 кошелек.',
-    rows: [
-      { label: 'Сумма в рублях', value: '200 000 ₽', tone: 'mono' },
-      { label: 'Вы получите (USDT)', value: '2 602.40 USDT', tone: 'accent' },
-      { label: 'Курс', value: '76.85 ₽', tone: 'mono' },
-      { label: 'ФИО', value: 'Иван И.' },
-      {
-        label: 'Кошелек для получения (TRC-20)',
-        value: 'TXxx...9Qm',
-        tone: 'mono',
-      },
-    ],
+    rows: [],
     highlights: [
-      'USDT будет отправлен на ваш TRC-20 кошелек после оплаты в офисе.',
+      'Введите свой TRC-20 кошелек полностью.',
+      'USDT будет отправлен после оплаты в офисе.',
+    ],
+    cta: 'Продолжить',
+  },
+  {
+    id: 'buy-confirm',
+    title: 'Проверка покупки',
+    eyebrow: 'Проверьте сумму, курс и кошелек перед созданием заявки.',
+    rows: [],
+    highlights: [
+      'Курс фиксируется на 20 минут.',
+      'USDT будет отправлен на указанный вами TRC-20 кошелек после оплаты в офисе.',
     ],
     cta: 'Создать заявку',
+  },
+  {
+    id: 'buy-created',
+    title: 'Заявка на покупку создана',
+    eyebrow: 'Менеджер свяжется с вами и подготовит офисную часть сделки.',
+    rows: [],
+    highlights: [
+      'Следуйте сообщениям бота и менеджера.',
+      'Наличные принимаются после проверки в офисе.',
+    ],
+    cta: 'На главный',
   },
   {
     id: 'sell',
     title: 'Продать USDT',
     eyebrow: 'Вы отправляете USDT, мы выдаем рубли в офисе.',
-    rows: [
-      { label: 'Сумма в USDT', value: '5 000 USDT', tone: 'mono' },
-      { label: 'Вы получите (рубли)', value: '381 250 ₽', tone: 'accent' },
-      { label: 'Курс', value: '76.25 ₽', tone: 'mono' },
-      { label: 'Сеть', value: 'Tron (TRC-20)' },
-    ],
+    rows: [],
     highlights: [
-      'Курс фиксируется на 20 минут',
-      'Переведите USDT одной транзакцией',
+      'Адрес для перевода появится только после создания заявки.',
+      'Переводите USDT одной транзакцией в сети Tron (TRC-20).',
+    ],
+    cta: 'Продолжить',
+  },
+  {
+    id: 'sell-confirm',
+    title: 'Проверка продажи',
+    eyebrow: 'Проверьте сумму и условия перед резервированием адреса.',
+    rows: [],
+    highlights: [
+      'Курс фиксируется на 20 минут.',
+      'Время реализации заявки 60 минут.',
+      'Адрес будет закреплен за этой заявкой после создания.',
     ],
     cta: 'Создать заявку',
   },
   {
+    id: 'sell-created',
+    title: 'Заявка на продажу создана',
+    eyebrow: 'Отправьте USDT на выданный TRC-20 адрес.',
+    rows: [],
+    highlights: [
+      'Переведите USDT одной транзакцией в сети Tron (TRC-20).',
+      'После входящего перевода менеджер продолжит офисную часть сделки.',
+    ],
+    cta: 'На главный',
+  },
+  {
     id: 'order-detail',
     title: 'Детали заявки',
-    eyebrow: 'Статус: В ожидании',
-    rows: [
-      { label: 'ID заявки', value: 'E00001', tone: 'mono' },
-      {
-        label: 'Адрес для перевода (TRC-20)',
-        value: 'TXxx...9Qm',
-        tone: 'mono',
-      },
-      { label: 'Сеть', value: 'Tron (TRC-20)' },
-      { label: 'Дата создания', value: '11 мая 2026, 14:05', tone: 'mono' },
-    ],
-    highlights: ['Отправьте USDT на адрес ниже', 'Только сеть Tron TRC-20'],
+    eyebrow: 'Текущий статус и платежные данные.',
+    rows: [],
+    highlights: ['Только сеть Tron (TRC-20)'],
     cta: 'На главный',
+  },
+  {
+    id: 'history',
+    title: 'История',
+    eyebrow: 'Закрытые и завершенные заявки.',
+    rows: [],
+    highlights: ['История появится после завершения первых обменов'],
   },
   {
     id: 'profile',
     title: 'Профиль',
-    eyebrow: 'Верифицированный клиент',
+    eyebrow: 'Профиль привязан к Telegram-пользователю',
     rows: [
-      { label: 'Обменов', value: '24', tone: 'mono' },
-      { label: 'Реферальный баланс', value: '0 USDT', tone: 'accent' },
-      { label: 'Telegram ID', value: '••••••83', tone: 'mono' },
       { label: 'Контактная поддержка', value: 'Telegram' },
       { label: 'Правила и условия', value: 'Открыть' },
       { label: 'О приложении', value: 'OBMEN Mini App' },
     ],
-    highlights: ['Профиль привязан к Telegram-пользователю'],
+    highlights: ['ФИО сохраняется после первой созданной заявки'],
   },
 ];

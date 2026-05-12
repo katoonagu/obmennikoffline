@@ -1,3 +1,4 @@
+import { isTronAddress } from '../domain/tronAddress.js';
 import type {
   MiniAppBuyOrderInput,
   MiniAppCustomerInput,
@@ -7,13 +8,23 @@ import type {
 export interface BuyOrderFormState {
   amountRub: string;
   clientPayoutAddress: string;
-  fullName: string;
+  customerLastName: string;
+  customerFirstName: string;
+  customerMiddleName: string;
 }
 
 export interface SellOrderFormState {
   amountUsdt: string;
-  fullName: string;
+  customerLastName: string;
+  customerFirstName: string;
+  customerMiddleName: string;
   acceptedTerms: boolean;
+}
+
+export interface CustomerProfileFormFields {
+  customerLastName: string;
+  customerFirstName: string;
+  customerMiddleName: string;
 }
 
 export type FormBuildResult<T> =
@@ -26,20 +37,36 @@ export type FormBuildResult<T> =
       message: string;
     };
 
-export function createInitialBuyOrderForm(): BuyOrderFormState {
+export function createInitialBuyOrderForm(
+  customer: Partial<CustomerProfileFormFields> = {},
+): BuyOrderFormState {
   return {
-    amountRub: '200 000',
-    clientPayoutAddress: 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7',
-    fullName: 'Иванов Иван Иванович',
+    amountRub: '',
+    clientPayoutAddress: '',
+    customerLastName: customer.customerLastName ?? '',
+    customerFirstName: customer.customerFirstName ?? '',
+    customerMiddleName: customer.customerMiddleName ?? '',
   };
 }
 
-export function createInitialSellOrderForm(): SellOrderFormState {
+export function createInitialSellOrderForm(
+  customer: Partial<CustomerProfileFormFields> = {},
+): SellOrderFormState {
   return {
-    amountUsdt: '5 000',
-    fullName: 'Иванов Иван Иванович',
-    acceptedTerms: true,
+    amountUsdt: '',
+    customerLastName: customer.customerLastName ?? '',
+    customerFirstName: customer.customerFirstName ?? '',
+    customerMiddleName: customer.customerMiddleName ?? '',
+    acceptedTerms: false,
   };
+}
+
+export function isBuyOrderFormReady(form: BuyOrderFormState): boolean {
+  return buildBuyOrderInput(form).ok;
+}
+
+export function isSellOrderFormReady(form: SellOrderFormState): boolean {
+  return buildSellOrderInput(form).ok;
 }
 
 export function buildBuyOrderInput(
@@ -50,13 +77,13 @@ export function buildBuyOrderInput(
   }
 
   const clientPayoutAddress = form.clientPayoutAddress.trim();
-  if (!clientPayoutAddress) {
-    return fail('Введите TRC-20 кошелек для получения USDT');
+  if (!clientPayoutAddress || !isTronAddress(clientPayoutAddress)) {
+    return fail('Введите корректный TRC-20 кошелек для получения USDT');
   }
 
-  const customer = parseFullName(form.fullName);
-  if (!customer) {
-    return fail('Введите ФИО полностью: фамилия, имя и отчество');
+  const customer = buildCustomerInput(form);
+  if (!customer.ok) {
+    return customer;
   }
 
   try {
@@ -65,7 +92,7 @@ export function buildBuyOrderInput(
       input: {
         amountRub: normalizeDecimalInput(form.amountRub, 2),
         clientPayoutAddress,
-        customer,
+        customer: customer.input,
       },
     };
   } catch {
@@ -80,9 +107,9 @@ export function buildSellOrderInput(
     return fail('Введите сумму в USDT');
   }
 
-  const customer = parseFullName(form.fullName);
-  if (!customer) {
-    return fail('Введите ФИО полностью: фамилия, имя и отчество');
+  const customer = buildCustomerInput(form);
+  if (!customer.ok) {
+    return customer;
   }
 
   if (!form.acceptedTerms) {
@@ -94,7 +121,7 @@ export function buildSellOrderInput(
       ok: true,
       input: {
         amountUsdt: normalizeDecimalInput(form.amountUsdt, 6),
-        customer,
+        customer: customer.input,
       },
     };
   } catch {
@@ -116,18 +143,32 @@ export function normalizeDecimalInput(value: string, scale: number): string {
   return `${integerPart}.${fractionalPart.padEnd(scale, '0')}`;
 }
 
-function parseFullName(value: string): MiniAppCustomerInput | null {
-  const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (parts.length < 3) {
-    return null;
+function buildCustomerInput(
+  form: CustomerProfileFormFields,
+): FormBuildResult<MiniAppCustomerInput> {
+  const lastName = form.customerLastName.trim();
+  const firstName = form.customerFirstName.trim();
+  const middleName = form.customerMiddleName.trim();
+
+  if (!lastName) {
+    return fail('Введите фамилию');
   }
 
-  const [lastName, firstName, ...middleNameParts] = parts;
+  if (!firstName) {
+    return fail('Введите имя');
+  }
+
+  if (!middleName) {
+    return fail('Введите отчество');
+  }
 
   return {
-    lastName,
-    firstName,
-    middleName: middleNameParts.join(' '),
+    ok: true,
+    input: {
+      lastName,
+      firstName,
+      middleName,
+    },
   };
 }
 

@@ -114,6 +114,7 @@ export const miniAppMockFixtures = {
   }),
   profile: {
     userId: 'telegram-user-1',
+    customer: MOCK_CUSTOMER,
     telegram: {
       telegramUserId: '462656683',
       username: 'pavel',
@@ -227,6 +228,7 @@ export function createMiniAppApiClient(
 export function createMockMiniAppApi(): MiniAppApi {
   const orders = [miniAppMockFixtures.sellOrder];
   let nextOrderNumber = 2;
+  let profileCustomer: UserProfileDto['customer'] = miniAppMockFixtures.profile.customer;
 
   return {
     async loadRates() {
@@ -262,6 +264,7 @@ export function createMockMiniAppApi(): MiniAppApi {
       return validateApiResponse(profileResponseSchema, {
         profile: {
           ...miniAppMockFixtures.profile,
+          customer: profileCustomer,
           stats: {
             ...miniAppMockFixtures.profile.stats,
             activeOrders: orders.length,
@@ -296,6 +299,7 @@ export function createMockMiniAppApi(): MiniAppApi {
         clientPayoutAddress: body.clientPayoutAddress,
         createdAt: MOCK_NOW,
       });
+      profileCustomer = input.customer;
       orders.unshift(order);
       return validateApiResponse(orderResponseSchema, { order }).order;
     },
@@ -325,6 +329,7 @@ export function createMockMiniAppApi(): MiniAppApi {
         clientPayoutAddress: null,
         createdAt: MOCK_NOW,
       });
+      profileCustomer = input.customer;
       orders.unshift(order);
       return validateApiResponse(orderResponseSchema, { order }).order;
     },

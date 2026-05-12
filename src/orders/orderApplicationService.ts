@@ -22,6 +22,19 @@ export interface OrderCreateDelegate<TOrder> {
   create(input: { data: OrderCreateData }): Promise<TOrder>;
 }
 
+export interface UserCustomerProfileUpdateDelegate {
+  update(input: {
+    where: {
+      id: string;
+    };
+    data: {
+      customerLastName: string;
+      customerFirstName: string;
+      customerMiddleName: string;
+    };
+  }): Promise<unknown>;
+}
+
 export interface DepositAddressReservationDelegate {
   findFirst(input: {
     where: {
@@ -54,10 +67,12 @@ export interface DepositAddressReservationDelegate {
 export interface OrderApplicationTransaction<TOrder> {
   depositAddress: DepositAddressReservationDelegate;
   order: OrderCreateDelegate<TOrder>;
+  user: UserCustomerProfileUpdateDelegate;
 }
 
 export interface OrderApplicationDb<TOrder> {
   order: OrderCreateDelegate<TOrder>;
+  user: UserCustomerProfileUpdateDelegate;
   $transaction<T>(fn: (tx: OrderApplicationTransaction<TOrder>) => Promise<T>): Promise<T>;
 }
 
@@ -71,7 +86,11 @@ export async function createBuyUsdtOrderInDb<TOrder>(
   input: CreateBuyUsdtOrderInput,
 ): Promise<TOrder> {
   const order = createBuyUsdtOrder(input);
-  return db.order.create({ data: toOrderCreateData(order) });
+
+  return db.$transaction(async (tx) => {
+    await updateUserCustomerProfile(tx.user, input);
+    return tx.order.create({ data: toOrderCreateData(order) });
+  });
 }
 
 export async function createSellUsdtOrderInDb<TOrder>(
@@ -143,12 +162,34 @@ export async function createSellUsdtOrderInDb<TOrder>(
         depositAddressId: reservation.addressId,
       });
 
+      await updateUserCustomerProfile(tx.user, input);
       return tx.order.create({ data: toOrderCreateData(order) });
     }
 
     throw new Error(
       'failed to reserve TRON deposit address after concurrent attempts',
     );
+  });
+}
+
+async function updateUserCustomerProfile(
+  user: UserCustomerProfileUpdateDelegate,
+  input: {
+    userId: string;
+    customerLastName: string;
+    customerFirstName: string;
+    customerMiddleName: string;
+  },
+): Promise<void> {
+  await user.update({
+    where: {
+      id: input.userId,
+    },
+    data: {
+      customerLastName: input.customerLastName,
+      customerFirstName: input.customerFirstName,
+      customerMiddleName: input.customerMiddleName,
+    },
   });
 }
 

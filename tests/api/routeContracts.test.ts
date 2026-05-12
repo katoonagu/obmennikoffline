@@ -51,6 +51,42 @@ describe('API route contracts', () => {
     ).toEqual(contracts.map((contract) => [contract.method, contract.path, true]));
   });
 
+  it('fixes the profile response DTO with optional stored customer FIO', () => {
+    const profileContract = findRoute(publicRouteContracts, '/api/profile');
+
+    expect(profileContract.responseSchema?.safeParse({
+      profile: {
+        userId: 'user-1',
+        customer: {
+          lastName: 'Ivanov',
+          firstName: 'Ivan',
+          middleName: 'Ivanovich',
+        },
+        telegram: {
+          telegramUserId: '462656683',
+          username: 'pavel',
+          firstName: 'Pavel',
+          lastName: null,
+        },
+        stats: {
+          totalOrders: 4,
+          activeOrders: 1,
+        },
+      },
+    }).success).toBe(true);
+    expect(profileContract.responseSchema?.safeParse({
+      profile: {
+        userId: 'user-1',
+        customer: null,
+        telegram: null,
+        stats: {
+          totalOrders: 0,
+          activeOrders: 0,
+        },
+      },
+    }).success).toBe(true);
+  });
+
   it('keeps spoofable and server-owned fields out of request bodies', () => {
     const statusContract = findRoute(
       adminRouteContracts,

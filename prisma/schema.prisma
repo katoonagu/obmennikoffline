@@ -51,11 +51,14 @@ enum AdminRole {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  telegramProfile TelegramProfile?
-  orders          Order[]
+  id                 String           @id @default(cuid())
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  customerLastName   String?
+  customerFirstName  String?
+  customerMiddleName String?
+  telegramProfile    TelegramProfile?
+  orders             Order[]
 }
 
 model TelegramProfile {

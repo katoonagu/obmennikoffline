@@ -61,12 +61,13 @@ describe('Mini App view models', () => {
     }));
   });
 
-  it('maps profile stats from the backend profile DTO', () => {
+  it('maps profile stats and stored customer FIO from the backend profile DTO', () => {
     const profile = createMiniAppProfileViewModel(miniAppMockFixtures.profile);
 
     expect(profile.telegramIdLabel).toBe('••••••83');
     expect(profile.totalOrdersLabel).toBe('24');
     expect(profile.activeOrdersLabel).toBe('1');
     expect(profile.usernameLabel).toBe('@pavel');
+    expect(profile.customerNameLabel).toBe('Ivanov Ivan Ivanovich');
   });
 });

@@ -188,7 +188,32 @@ describe('Mini App API integration contract', () => {
       direction: 'SELL_USDT',
       depositAddress: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
       clientPayoutAddress: null,
-      status: 'awaiting_deposit',
+        status: 'awaiting_deposit',
+      });
+  });
+
+  it('loads profile customer FIO used to prefill new order forms', async () => {
+    const api = createMiniAppApiClient({
+      baseUrl: '',
+      devUserId: 'telegram-user-1',
+      fetch: vi.fn(async () => jsonResponse({
+        profile: {
+          ...miniAppMockFixtures.profile,
+          customer: {
+            lastName: 'Ivanov',
+            firstName: 'Ivan',
+            middleName: 'Ivanovich',
+          },
+        },
+      })),
+    });
+
+    await expect(api.getProfile()).resolves.toMatchObject({
+      customer: {
+        lastName: 'Ivanov',
+        firstName: 'Ivan',
+        middleName: 'Ivanovich',
+      },
     });
   });
 });

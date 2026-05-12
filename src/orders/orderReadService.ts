@@ -79,6 +79,11 @@ export interface TelegramProfileRecord {
 
 export interface UserProfileDto {
   userId: string;
+  customer: {
+    lastName: string;
+    firstName: string;
+    middleName: string;
+  } | null;
   telegram: {
     telegramUserId: string;
     username: string | null;
@@ -92,6 +97,9 @@ export interface UserProfileDto {
 }
 
 export interface OrderReadDb {
+  user: {
+    findUnique(input: UserFindUniqueInput): Promise<UserProfileRecord | null>;
+  };
   order: {
     findMany(input: OrderFindManyInput): Promise<ReadableOrderRecord[]>;
     findFirst(input: OrderFindFirstInput): Promise<ReadableOrderRecord | null>;
@@ -100,6 +108,12 @@ export interface OrderReadDb {
   telegramProfile: {
     findUnique(input: TelegramProfileFindUniqueInput): Promise<TelegramProfileRecord | null>;
   };
+}
+
+export interface UserProfileRecord {
+  customerLastName: string | null;
+  customerFirstName: string | null;
+  customerMiddleName: string | null;
 }
 
 interface OrderReadWhere {
@@ -137,6 +151,17 @@ interface TelegramProfileFindUniqueInput {
     username: true;
     firstName: true;
     lastName: true;
+  };
+}
+
+interface UserFindUniqueInput {
+  where: {
+    id: string;
+  };
+  select: {
+    customerLastName: true;
+    customerFirstName: true;
+    customerMiddleName: true;
   };
 }
 
@@ -286,7 +311,17 @@ export async function getUserProfile(
   },
 ): Promise<UserProfileDto> {
   const userId = assertRequiredString(input.userId, 'userId');
-  const [telegram, totalOrders, activeOrders] = await Promise.all([
+  const [user, telegram, totalOrders, activeOrders] = await Promise.all([
+    db.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        customerLastName: true,
+        customerFirstName: true,
+        customerMiddleName: true,
+      },
+    }),
     db.telegramProfile.findUnique({
       where: {
         userId,
@@ -315,6 +350,7 @@ export async function getUserProfile(
 
   return {
     userId,
+    customer: toCustomerProfileDto(user),
     telegram: telegram
       ? {
           telegramUserId: telegram.telegramUserId.toString(),
@@ -327,6 +363,24 @@ export async function getUserProfile(
       totalOrders,
       activeOrders,
     },
+  };
+}
+
+function toCustomerProfileDto(
+  user: UserProfileRecord | null,
+): UserProfileDto['customer'] {
+  if (
+    !user?.customerLastName ||
+    !user.customerFirstName ||
+    !user.customerMiddleName
+  ) {
+    return null;
+  }
+
+  return {
+    lastName: user.customerLastName,
+    firstName: user.customerFirstName,
+    middleName: user.customerMiddleName,
   };
 }
 

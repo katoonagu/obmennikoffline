@@ -2,37 +2,53 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
-  CheckCircle2 as CheckCircle,
-  Clock3 as Timer,
+  BadgeCheck,
+  Building2,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
   Copy,
+  FileText,
+  History,
   Home as House,
   Info,
-  LockKeyhole as LockKey,
-  LogOut as SignOut,
-  TriangleAlert as Warning,
+  LockKeyhole,
+  LogOut,
+  MessageCircle,
+  ShieldCheck,
+  TriangleAlert,
   User,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { OrderDto, UserProfileDto } from '../orders/orderReadService.js';
+import {
+  createUsdtRubOrderQuote,
+  type UsdtRubRates,
+} from '../rates/rateQuoteService.js';
 import {
   miniAppBrand,
   miniAppScreens,
   type MiniAppRow,
   type MiniAppScreen,
   type MiniAppScreenId,
-  type MiniAppTone,
 } from './miniAppContent.js';
 import {
   miniAppMockFixtures,
   type MiniAppApi,
+  type MiniAppCustomerInput,
 } from './miniAppApi.js';
 import {
-  createMiniAppApiFromRuntimeConfig,
-  loadBrowserMiniAppRuntimeConfig,
-} from './miniAppRuntimeConfig.js';
-import type { OrderDto, UserProfileDto } from '../orders/orderReadService.js';
-import type { UsdtRubRates } from '../rates/rateQuoteService.js';
+  buildBuyOrderInput,
+  buildSellOrderInput,
+  createInitialBuyOrderForm,
+  createInitialSellOrderForm,
+  isBuyOrderFormReady,
+  isSellOrderFormReady,
+  type BuyOrderFormState,
+  type SellOrderFormState,
+} from './miniAppOrderForms.js';
 import {
   createMiniAppHomeViewModel,
   createMiniAppOrderDetailViewModel,
@@ -43,13 +59,10 @@ import {
   type MiniAppProfileViewModel,
 } from './miniAppViewModel.js';
 import {
-  buildBuyOrderInput,
-  buildSellOrderInput,
-  createInitialBuyOrderForm,
-  createInitialSellOrderForm,
-  type BuyOrderFormState,
-  type SellOrderFormState,
-} from './miniAppOrderForms.js';
+  createMiniAppApiFromRuntimeConfig,
+  loadBrowserMiniAppRuntimeConfig,
+} from './miniAppRuntimeConfig.js';
+import { createQrCodeDataUrl } from './qrCodeDataUrl.js';
 
 const screenById = new Map<MiniAppScreenId, MiniAppScreen>(
   miniAppScreens.map((screen) => [screen.id, screen]),
@@ -57,7 +70,7 @@ const screenById = new Map<MiniAppScreenId, MiniAppScreen>(
 
 const navItems: Array<{ id: MiniAppScreenId; label: string; icon: LucideIcon }> = [
   { id: 'home', label: 'Главная', icon: House },
-  { id: 'order-detail', label: 'История', icon: Timer },
+  { id: 'history', label: 'История', icon: History },
   { id: 'profile', label: 'Профиль', icon: User },
 ];
 
@@ -93,6 +106,7 @@ export function App() {
   );
   const [submissionError, setSubmissionError] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const screenScrollRef = useRef<HTMLElement | null>(null);
   const activeScreen = useMemo(() => getScreen(activeScreenId), [activeScreenId]);
   const homeModel = useMemo<MiniAppHomeViewModel>(
     () => createMiniAppHomeViewModel({ rates, activeOrders }),
@@ -121,6 +135,8 @@ export function App() {
         setActiveOrders(loadedOrders);
         setSelectedOrder(loadedOrders[0] ?? null);
         setProfile(loadedProfile);
+        setBuyForm((form) => mergeCustomerIntoBuyForm(form, loadedProfile.customer));
+        setSellForm((form) => mergeCustomerIntoSellForm(form, loadedProfile.customer));
         setLoadingLabel('');
       })
       .catch(() => {
@@ -134,23 +150,62 @@ export function App() {
     };
   }, [api]);
 
-  async function refreshActiveOrders(nextSelectedOrder?: OrderDto) {
-    const loadedOrders = await api.listActiveOrders({ limit: 5 });
-    setActiveOrders(loadedOrders);
-    setSelectedOrder(nextSelectedOrder ?? loadedOrders[0] ?? null);
+  useEffect(() => {
+    screenScrollRef.current?.scrollTo({ top: 0 });
+  }, [activeScreenId]);
+
+  function handleBack() {
+    setSubmissionError(undefined);
+    if (activeScreenId === 'buy-confirm') {
+      setActiveScreenId('buy');
+      return;
+    }
+    if (activeScreenId === 'sell-confirm') {
+      setActiveScreenId('sell');
+      return;
+    }
+    setActiveScreenId('home');
   }
 
-  async function handleCreateBuyOrder() {
+  function handleHome() {
+    setSubmissionError(undefined);
+    setActiveScreenId('home');
+  }
+
+  function handleContinueBuyOrder() {
     const result = buildBuyOrderInput(buyForm);
     if (!result.ok) {
       setSubmissionError(result.message);
       return;
     }
 
+    setSubmissionError(undefined);
+    setActiveScreenId('buy-confirm');
+  }
+
+  function handleContinueSellOrder() {
+    const result = buildSellOrderInput(sellForm);
+    if (!result.ok) {
+      setSubmissionError(result.message);
+      return;
+    }
+
+    setSubmissionError(undefined);
+    setActiveScreenId('sell-confirm');
+  }
+
+  async function handleCreateBuyOrder() {
+    const result = buildBuyOrderInput(buyForm);
+    if (!result.ok) {
+      setSubmissionError(result.message);
+      setActiveScreenId('buy');
+      return;
+    }
+
     await submitOrder(async () => {
       const order = await api.createBuyOrder(result.input);
-      await refreshActiveOrders(order);
-      setActiveScreenId('order-detail');
+      await refreshAfterCreatedOrder(order);
+      setActiveScreenId('buy-created');
     });
   }
 
@@ -158,14 +213,25 @@ export function App() {
     const result = buildSellOrderInput(sellForm);
     if (!result.ok) {
       setSubmissionError(result.message);
+      setActiveScreenId('sell');
       return;
     }
 
     await submitOrder(async () => {
       const order = await api.createSellOrder(result.input);
-      await refreshActiveOrders(order);
-      setActiveScreenId('order-detail');
+      await refreshAfterCreatedOrder(order);
+      setActiveScreenId('sell-created');
     });
+  }
+
+  async function refreshAfterCreatedOrder(order: OrderDto) {
+    const [loadedOrders, loadedProfile] = await Promise.all([
+      api.listActiveOrders({ limit: 5 }),
+      api.getProfile(),
+    ]);
+    setActiveOrders(loadedOrders);
+    setSelectedOrder(order);
+    setProfile(loadedProfile);
   }
 
   async function submitOrder(createOrder: () => Promise<void>) {
@@ -174,7 +240,9 @@ export function App() {
     try {
       await createOrder();
     } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : 'Не удалось создать заявку');
+      setSubmissionError(
+        error instanceof Error ? error.message : 'Не удалось создать заявку',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -191,10 +259,11 @@ export function App() {
 
         <AppHeader
           activeScreen={activeScreen}
-          onBack={() => setActiveScreenId('home')}
+          onBack={handleBack}
+          onAbout={() => setActiveScreenId('about')}
         />
 
-        <section className="screen-scroll">
+        <section className="screen-scroll" ref={screenScrollRef}>
           {loadingLabel && <div className="sync-banner">{loadingLabel}</div>}
           {activeScreen.id === 'home' && (
             <HomeScreen
@@ -207,33 +276,79 @@ export function App() {
               }}
             />
           )}
+          {activeScreen.id === 'about' && <AboutScreen screen={activeScreen} />}
           {activeScreen.id === 'buy' && (
-            <FlowScreen
+            <BuyFormScreen
               screen={activeScreen}
-              variant="buy"
-              buyForm={buyForm}
-              onBuyFormChange={setBuyForm}
+              form={buyForm}
               errorMessage={submissionError}
               isSubmitting={isSubmitting}
+              onChange={setBuyForm}
+              onContinue={handleContinueBuyOrder}
+            />
+          )}
+          {activeScreen.id === 'buy-confirm' && (
+            <BuyConfirmScreen
+              screen={activeScreen}
+              form={buyForm}
+              rates={rates}
+              errorMessage={submissionError}
+              isSubmitting={isSubmitting}
+              onBack={() => setActiveScreenId('buy')}
               onCreate={handleCreateBuyOrder}
             />
           )}
-          {activeScreen.id === 'sell' && (
-            <FlowScreen
+          {activeScreen.id === 'buy-created' && (
+            <CreatedOrderScreen
               screen={activeScreen}
-              variant="sell"
-              sellForm={sellForm}
-              onSellFormChange={setSellForm}
+              order={selectedOrder}
+              mode="buy"
+              onHome={handleHome}
+              onDetail={() => setActiveScreenId('order-detail')}
+            />
+          )}
+          {activeScreen.id === 'sell' && (
+            <SellFormScreen
+              screen={activeScreen}
+              form={sellForm}
               errorMessage={submissionError}
               isSubmitting={isSubmitting}
+              onChange={setSellForm}
+              onContinue={handleContinueSellOrder}
+            />
+          )}
+          {activeScreen.id === 'sell-confirm' && (
+            <SellConfirmScreen
+              screen={activeScreen}
+              form={sellForm}
+              rates={rates}
+              errorMessage={submissionError}
+              isSubmitting={isSubmitting}
+              onBack={() => setActiveScreenId('sell')}
               onCreate={handleCreateSellOrder}
+            />
+          )}
+          {activeScreen.id === 'sell-created' && (
+            <CreatedOrderScreen
+              screen={activeScreen}
+              order={selectedOrder}
+              mode="sell"
+              onHome={handleHome}
+              onDetail={() => setActiveScreenId('order-detail')}
             />
           )}
           {activeScreen.id === 'order-detail' && (
             <OrderDetailScreen
               model={detailModel}
-              onHome={() => setActiveScreenId('home')}
+              onHome={handleHome}
             />
+          )}
+          {activeScreen.id === 'history' && (
+            <HistoryScreen activeOrders={activeOrders} onOpenOrder={(publicId) => {
+              const order = activeOrders.find((candidate) => candidate.publicId === publicId);
+              setSelectedOrder(order ?? null);
+              setActiveScreenId('order-detail');
+            }} />
           )}
           {activeScreen.id === 'profile' && (
             <ProfileScreen screen={activeScreen} model={profileModel} />
@@ -249,9 +364,11 @@ export function App() {
 function AppHeader({
   activeScreen,
   onBack,
+  onAbout,
 }: {
   activeScreen: MiniAppScreen;
   onBack: () => void;
+  onAbout: () => void;
 }) {
   const isHome = activeScreen.id === 'home';
 
@@ -268,10 +385,15 @@ function AppHeader({
         </button>
       )}
 
-      <h1 className="header-title">{isHome ? '' : activeScreen.title}</h1>
+      {!isHome && <h1 className="header-title">{activeScreen.title}</h1>}
 
-      <button className="icon-button" type="button" aria-label="Безопасность">
-        <LockKey size={19} />
+      <button
+        className="icon-button"
+        type="button"
+        onClick={isHome ? onAbout : undefined}
+        aria-label={isHome ? 'О нас' : 'Защищенный обмен'}
+      >
+        {isHome ? <Info size={19} /> : <LockKeyhole size={19} />}
       </button>
     </header>
   );
@@ -311,167 +433,402 @@ function HomeScreen({
       </div>
 
       <section className="section-block" aria-labelledby="active-orders-title">
-        <h3 id="active-orders-title">Активные заявки</h3>
-        {model.activeOrders.map((order) => (
-          <button
-            className="order-card"
-            type="button"
-            key={order.publicId}
-            onClick={() => onOpenOrder(order.publicId)}
-          >
-            <span className="order-card-title">{order.title}</span>
-            <span className={`status-badge tone-${order.statusTone}`}>
-              {order.statusLabel}
-            </span>
-            <span className="order-card-meta">ID: {order.publicId}</span>
-            <span className="order-card-meta">{order.createdAtLabel}</span>
+        <div className="section-heading-row">
+          <h3 id="active-orders-title">Активные заявки</h3>
+          <button className="text-button" type="button" onClick={() => onNavigate('history')}>
+            История
           </button>
-        ))}
+        </div>
+        {model.activeOrders.length > 0 ? (
+          model.activeOrders.map((order) => (
+            <button
+              className="order-card"
+              type="button"
+              key={order.publicId}
+              onClick={() => onOpenOrder(order.publicId)}
+            >
+              <span className="order-card-title">{order.title}</span>
+              <span className={`status-badge tone-${order.statusTone}`}>
+                {order.statusLabel}
+              </span>
+              <span className="order-card-meta">ID: {order.publicId}</span>
+              <span className="order-card-meta">{order.createdAtLabel}</span>
+              <ChevronRight className="order-card-chevron" size={18} />
+            </button>
+          ))
+        ) : (
+          <div className="empty-panel">Активных заявок нет</div>
+        )}
       </section>
     </div>
   );
 }
 
-function FlowScreen({
+function AboutScreen({ screen }: { screen: MiniAppScreen }) {
+  const icons = [Building2, MessageCircle, BadgeCheck, FileText, ShieldCheck];
+
+  return (
+    <div className="screen-stack">
+      <p className="screen-eyebrow">{screen.eyebrow}</p>
+      <div className="about-media" aria-hidden="true">
+        <div>
+          <strong>OBMEN</strong>
+          <span>USDT/RUB</span>
+        </div>
+      </div>
+      <div className="menu-list">
+        {screen.rows.map((row, index) => {
+          const Icon = icons[index] ?? Info;
+          return (
+            <button className="menu-row" type="button" key={row.label}>
+              <Icon size={18} />
+              <span>{row.label}</span>
+              <span>{row.value}</span>
+            </button>
+          );
+        })}
+      </div>
+      <HighlightStack highlights={screen.highlights} tone="accent" />
+    </div>
+  );
+}
+
+function BuyFormScreen({
   screen,
-  variant,
-  buyForm,
-  sellForm,
-  onBuyFormChange,
-  onSellFormChange,
+  form,
   errorMessage,
   isSubmitting,
-  onCreate,
+  onChange,
+  onContinue,
 }: {
   screen: MiniAppScreen;
-  variant: 'buy' | 'sell';
-  buyForm?: BuyOrderFormState;
-  sellForm?: SellOrderFormState;
-  onBuyFormChange?: (form: BuyOrderFormState) => void;
-  onSellFormChange?: (form: SellOrderFormState) => void;
+  form: BuyOrderFormState;
   errorMessage?: string;
   isSubmitting: boolean;
-  onCreate: () => Promise<void>;
+  onChange: (form: BuyOrderFormState) => void;
+  onContinue: () => void;
 }) {
   return (
     <form
       className="screen-stack order-form"
       onSubmit={(event) => {
         event.preventDefault();
-        void onCreate();
+        onContinue();
       }}
     >
       <p className="screen-eyebrow">{screen.eyebrow}</p>
-
-      {variant === 'buy' && buyForm && onBuyFormChange && (
-        <>
-          <FormField
-            label="Сумма в рублях"
-            value={buyForm.amountRub}
-            inputMode="decimal"
-            helper="Сколько рублей вы принесете в офис."
-            onChange={(amountRub) => onBuyFormChange({ ...buyForm, amountRub })}
-          />
-          <FormField
-            label="Кошелек для получения (TRC-20)"
-            value={buyForm.clientPayoutAddress}
-            inputMode="text"
-            helper="USDT будет отправлен на этот адрес после оплаты."
-            onChange={(clientPayoutAddress) =>
-              onBuyFormChange({ ...buyForm, clientPayoutAddress })
-            }
-          />
-          <FormField
-            label="ФИО"
-            value={buyForm.fullName}
-            inputMode="text"
-            helper="Фамилия, имя и отчество для пропуска."
-            onChange={(fullName) => onBuyFormChange({ ...buyForm, fullName })}
-          />
-        </>
-      )}
-
-      {variant === 'sell' && sellForm && onSellFormChange && (
-        <>
-          <FormField
-            label="Сумма в USDT"
-            value={sellForm.amountUsdt}
-            inputMode="decimal"
-            helper="Сумма продажи в сети Tron TRC-20."
-            onChange={(amountUsdt) => onSellFormChange({ ...sellForm, amountUsdt })}
-          />
-          <FormField
-            label="ФИО"
-            value={sellForm.fullName}
-            inputMode="text"
-            helper="Фамилия, имя и отчество для пропуска."
-            onChange={(fullName) => onSellFormChange({ ...sellForm, fullName })}
-          />
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={sellForm.acceptedTerms}
-              onChange={(event) =>
-                onSellFormChange({
-                  ...sellForm,
-                  acceptedTerms: event.currentTarget.checked,
-                })
-              }
-            />
-            <span>Принимаю правила и условия обмена</span>
-          </label>
-        </>
-      )}
-
-      <div className="warning-stack">
-        {screen.highlights.map((highlight, index) => (
-          <div className="inline-warning" key={highlight}>
-            {variant === 'buy' ? (
-              <Info size={18} />
-            ) : index === 0 ? (
-              <Timer size={18} />
-            ) : (
-              <Warning size={18} />
-            )}
-            <span>{highlight}</span>
-          </div>
-        ))}
-      </div>
-
+      <FormField
+        label="Сумма в рублях"
+        value={form.amountRub}
+        inputMode="decimal"
+        placeholder="200 000"
+        onChange={(amountRub) => onChange({ ...form, amountRub })}
+      />
+      <NameFields form={form} onChange={onChange} />
+      <FormField
+        label="Кошелек для получения (TRC-20)"
+        value={form.clientPayoutAddress}
+        inputMode="text"
+        placeholder="T..."
+        onChange={(clientPayoutAddress) =>
+          onChange({ ...form, clientPayoutAddress })
+        }
+      />
+      <HighlightStack highlights={screen.highlights} tone="accent" />
       {errorMessage && <p className="form-error">{errorMessage}</p>}
-
-      <button className="primary-button" type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Создаем заявку' : screen.cta}
+      <button
+        className="primary-button"
+        type="submit"
+        disabled={isSubmitting || !isBuyOrderFormReady(form)}
+      >
+        {screen.cta}
       </button>
     </form>
   );
 }
 
-function FormField({
-  label,
-  value,
-  inputMode,
-  helper,
+function SellFormScreen({
+  screen,
+  form,
+  errorMessage,
+  isSubmitting,
   onChange,
+  onContinue,
 }: {
-  label: string;
-  value: string;
-  inputMode: 'decimal' | 'text';
-  helper: string;
-  onChange: (value: string) => void;
+  screen: MiniAppScreen;
+  form: SellOrderFormState;
+  errorMessage?: string;
+  isSubmitting: boolean;
+  onChange: (form: SellOrderFormState) => void;
+  onContinue: () => void;
 }) {
   return (
-    <label className="form-field">
-      <span>{label}</span>
-      <input
-        className="form-input"
-        value={value}
-        inputMode={inputMode}
-        autoComplete="off"
-        onChange={(event) => onChange(event.currentTarget.value)}
+    <form
+      className="screen-stack order-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onContinue();
+      }}
+    >
+      <p className="screen-eyebrow">{screen.eyebrow}</p>
+      <FormField
+        label="Сумма в USDT"
+        value={form.amountUsdt}
+        inputMode="decimal"
+        placeholder="5 000"
+        onChange={(amountUsdt) => onChange({ ...form, amountUsdt })}
       />
-      <small>{helper}</small>
-    </label>
+      <NameFields form={form} onChange={onChange} />
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={form.acceptedTerms}
+          onChange={(event) =>
+            onChange({
+              ...form,
+              acceptedTerms: event.currentTarget.checked,
+            })
+          }
+        />
+        <span>Принимаю правила и условия обмена</span>
+      </label>
+      <HighlightStack highlights={screen.highlights} tone="warning" />
+      {errorMessage && <p className="form-error">{errorMessage}</p>}
+      <button
+        className="primary-button"
+        type="submit"
+        disabled={isSubmitting || !isSellOrderFormReady(form)}
+      >
+        {screen.cta}
+      </button>
+    </form>
+  );
+}
+
+function BuyConfirmScreen({
+  screen,
+  form,
+  rates,
+  errorMessage,
+  isSubmitting,
+  onBack,
+  onCreate,
+}: {
+  screen: MiniAppScreen;
+  form: BuyOrderFormState;
+  rates: UsdtRubRates;
+  errorMessage?: string;
+  isSubmitting: boolean;
+  onBack: () => void;
+  onCreate: () => Promise<void>;
+}) {
+  const result = buildBuyOrderInput(form);
+
+  if (!result.ok) {
+    return <InvalidConfirmState message={result.message} onBack={onBack} />;
+  }
+
+  const quote = createUsdtRubOrderQuote({
+    direction: 'BUY_USDT',
+    amountRub: result.input.amountRub,
+    rates,
+  });
+  const rows: DisplayRow[] = [
+    { label: 'Сумма в рублях', value: `${formatRub(quote.amountRub)} ₽`, tone: 'mono' },
+    { label: 'Вы получите', value: `${formatDecimal(quote.amountUsdt, 2)} USDT`, tone: 'accent' },
+    { label: 'Курс', value: `${formatDecimal(quote.rateSnapshot, 2)} ₽`, tone: 'mono' },
+    { label: 'ФИО', value: formatCustomer(result.input.customer) },
+    {
+      label: 'Кошелек для получения (TRC-20)',
+      value: result.input.clientPayoutAddress,
+      tone: 'mono',
+      copyable: true,
+    },
+    { label: 'Сеть', value: 'Tron (TRC-20)' },
+  ];
+
+  return (
+    <ConfirmScreen
+      screen={screen}
+      rows={rows}
+      highlights={screen.highlights}
+      errorMessage={errorMessage}
+      isSubmitting={isSubmitting}
+      onBack={onBack}
+      onCreate={onCreate}
+    />
+  );
+}
+
+function SellConfirmScreen({
+  screen,
+  form,
+  rates,
+  errorMessage,
+  isSubmitting,
+  onBack,
+  onCreate,
+}: {
+  screen: MiniAppScreen;
+  form: SellOrderFormState;
+  rates: UsdtRubRates;
+  errorMessage?: string;
+  isSubmitting: boolean;
+  onBack: () => void;
+  onCreate: () => Promise<void>;
+}) {
+  const result = buildSellOrderInput(form);
+
+  if (!result.ok) {
+    return <InvalidConfirmState message={result.message} onBack={onBack} />;
+  }
+
+  const quote = createUsdtRubOrderQuote({
+    direction: 'SELL_USDT',
+    amountUsdt: result.input.amountUsdt,
+    rates,
+  });
+  const rows: DisplayRow[] = [
+    { label: 'Сумма в USDT', value: `${formatDecimal(quote.amountUsdt, 2)} USDT`, tone: 'mono' },
+    { label: 'Вы получите', value: `${formatRub(quote.amountRub)} ₽`, tone: 'accent' },
+    { label: 'Курс', value: `${formatDecimal(quote.rateSnapshot, 2)} ₽`, tone: 'mono' },
+    { label: 'ФИО', value: formatCustomer(result.input.customer) },
+    { label: 'Сеть', value: 'Tron (TRC-20)' },
+  ];
+
+  return (
+    <ConfirmScreen
+      screen={screen}
+      rows={rows}
+      highlights={screen.highlights}
+      errorMessage={errorMessage}
+      isSubmitting={isSubmitting}
+      onBack={onBack}
+      onCreate={onCreate}
+    />
+  );
+}
+
+function ConfirmScreen({
+  screen,
+  rows,
+  highlights,
+  errorMessage,
+  isSubmitting,
+  onBack,
+  onCreate,
+}: {
+  screen: MiniAppScreen;
+  rows: DisplayRow[];
+  highlights: string[];
+  errorMessage?: string;
+  isSubmitting: boolean;
+  onBack: () => void;
+  onCreate: () => Promise<void>;
+}) {
+  return (
+    <form
+      className="screen-stack"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void onCreate();
+      }}
+    >
+      <p className="screen-eyebrow">{screen.eyebrow}</p>
+      <div className="field-stack">
+        {rows.map((row) => (
+          <DataPanel key={row.label} row={row} />
+        ))}
+      </div>
+      <HighlightStack highlights={highlights} tone="warning" />
+      {errorMessage && <p className="form-error">{errorMessage}</p>}
+      <div className="button-row">
+        <button className="secondary-button" type="button" onClick={onBack}>
+          Изменить
+        </button>
+        <button className="primary-button" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Создаем заявку' : screen.cta}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function InvalidConfirmState({
+  message,
+  onBack,
+}: {
+  message: string;
+  onBack: () => void;
+}) {
+  return (
+    <div className="screen-stack">
+      <p className="form-error">{message}</p>
+      <button className="secondary-button" type="button" onClick={onBack}>
+        Вернуться к форме
+      </button>
+    </div>
+  );
+}
+
+function CreatedOrderScreen({
+  screen,
+  order,
+  mode,
+  onHome,
+  onDetail,
+}: {
+  screen: MiniAppScreen;
+  order: OrderDto | null;
+  mode: 'buy' | 'sell';
+  onHome: () => void;
+  onDetail: () => void;
+}) {
+  if (!order) {
+    return (
+      <div className="screen-stack">
+        <p className="screen-eyebrow">Заявка не выбрана.</p>
+        <button className="secondary-button" type="button" onClick={onHome}>
+          На главный
+        </button>
+      </div>
+    );
+  }
+
+  const model = createMiniAppOrderDetailViewModel(order);
+
+  return (
+    <div className="screen-stack">
+      <p className="screen-eyebrow">{screen.eyebrow}</p>
+      <div className="success-panel">
+        <CheckCircle2 size={22} />
+        <strong>{screen.title}</strong>
+        <span>ID: {order.publicId}</span>
+      </div>
+      {mode === 'sell' && order.depositAddress ? (
+        <QrCodePanel address={order.depositAddress} />
+      ) : (
+        <div className="qr-panel text-panel">
+          <Building2 size={22} />
+          <span>Приходите в офис с RUB. USDT отправляется на ваш кошелек после оплаты.</span>
+        </div>
+      )}
+      <div className="field-stack">
+        <DataPanel row={{ label: model.directionLabel, value: model.primaryAmountLabel, tone: 'mono' }} />
+        {model.rows.map((row) => (
+          <DataPanel key={row.label} row={row} />
+        ))}
+      </div>
+      <HighlightStack highlights={screen.highlights} tone={mode === 'sell' ? 'warning' : 'accent'} />
+      <div className="button-row">
+        <button className="secondary-button" type="button" onClick={onDetail}>
+          Детали
+        </button>
+        <button className="primary-button" type="button" onClick={onHome}>
+          {screen.cta}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -509,14 +866,7 @@ function OrderDetailScreen({
       }} />
 
       {model.qrValue ? (
-        <div className="qr-panel">
-          <span>Отправьте USDT на адрес ниже</span>
-          <div className="fake-qr" aria-label="QR код адреса для перевода">
-            {Array.from({ length: 64 }, (_, index) => (
-              <span key={index} className={index % 3 === 0 || index % 7 === 0 ? 'qr-dot on' : 'qr-dot'} />
-            ))}
-          </div>
-        </div>
+        <QrCodePanel address={model.qrValue} />
       ) : (
         <div className="qr-panel text-panel">
           <Info size={22} />
@@ -535,6 +885,47 @@ function OrderDetailScreen({
   );
 }
 
+function HistoryScreen({
+  activeOrders,
+  onOpenOrder,
+}: {
+  activeOrders: OrderDto[];
+  onOpenOrder: (publicId: string) => void;
+}) {
+  return (
+    <div className="screen-stack">
+      <p className="screen-eyebrow">Закрытые заявки появятся после завершения обменов.</p>
+      <section className="section-block">
+        <h3>Текущие заявки</h3>
+        {activeOrders.length > 0 ? (
+          activeOrders.map((order) => {
+            const card = createMiniAppHomeViewModel({
+              rates: miniAppMockFixtures.rates,
+              activeOrders: [order],
+            }).activeOrders[0];
+            return (
+              <button
+                className="order-card"
+                type="button"
+                key={card.publicId}
+                onClick={() => onOpenOrder(card.publicId)}
+              >
+                <span className="order-card-title">{card.title}</span>
+                <span className={`status-badge tone-${card.statusTone}`}>{card.statusLabel}</span>
+                <span className="order-card-meta">ID: {card.publicId}</span>
+                <span className="order-card-meta">{card.createdAtLabel}</span>
+                <ChevronRight className="order-card-chevron" size={18} />
+              </button>
+            );
+          })
+        ) : (
+          <div className="empty-panel">Заявок пока нет</div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function ProfileScreen({
   screen,
   model,
@@ -542,6 +933,14 @@ function ProfileScreen({
   screen: MiniAppScreen;
   model: MiniAppProfileViewModel;
 }) {
+  const profileRows: DisplayRow[] = [
+    { label: 'ФИО', value: model.customerNameLabel },
+    { label: 'Telegram ID', value: model.telegramIdLabel, tone: 'mono', copyable: true },
+    { label: 'Username', value: model.usernameLabel, tone: 'mono' },
+    { label: 'Всего обменов', value: model.totalOrdersLabel, tone: 'mono' },
+    { label: 'Активные заявки', value: model.activeOrdersLabel, tone: 'mono' },
+  ];
+
   return (
     <div className="screen-stack">
       <div className="profile-card">
@@ -550,42 +949,21 @@ function ProfileScreen({
         </div>
         <div>
           <span className="verified-line">
-            <CheckCircle size={16} />
-            {screen.eyebrow}
+            <ShieldCheck size={16} />
+            Telegram-профиль
           </span>
-          <strong>Обменов: {model.totalOrdersLabel}</strong>
+          <strong>{model.customerNameLabel}</strong>
         </div>
       </div>
 
       <div className="field-stack">
-        {[
-          {
-            label: 'Реферальный баланс',
-            value: '0 USDT',
-            tone: 'accent' as MiniAppTone,
-          },
-          {
-            label: 'Telegram ID',
-            value: model.telegramIdLabel,
-            tone: 'mono' as MiniAppTone,
-          },
-          {
-            label: 'Активные заявки',
-            value: model.activeOrdersLabel,
-            tone: 'mono' as MiniAppTone,
-          },
-          {
-            label: 'Username',
-            value: model.usernameLabel,
-            tone: 'mono' as MiniAppTone,
-          },
-        ].map((row) => (
-          <DataPanel key={row.label} row={row} withCopy />
+        {profileRows.map((row) => (
+          <DataPanel key={row.label} row={row} />
         ))}
       </div>
 
       <div className="menu-list">
-        {screen.rows.slice(3).map((row) => (
+        {screen.rows.map((row) => (
           <button className="menu-row" type="button" key={row.label}>
             <Wallet size={18} />
             <span>{row.label}</span>
@@ -593,10 +971,162 @@ function ProfileScreen({
           </button>
         ))}
         <button className="menu-row danger" type="button">
-          <SignOut size={18} />
+          <LogOut size={18} />
           <span>Выйти из Mini App</span>
         </button>
       </div>
+    </div>
+  );
+}
+
+function NameFields<T extends BuyOrderFormState | SellOrderFormState>({
+  form,
+  onChange,
+}: {
+  form: T;
+  onChange: (form: T) => void;
+}) {
+  return (
+    <div className="name-grid" aria-label="ФИО">
+      <FormField
+        label="Фамилия"
+        value={form.customerLastName}
+        inputMode="text"
+        autoComplete="family-name"
+        onChange={(customerLastName) => onChange({ ...form, customerLastName })}
+      />
+      <FormField
+        label="Имя"
+        value={form.customerFirstName}
+        inputMode="text"
+        autoComplete="given-name"
+        onChange={(customerFirstName) => onChange({ ...form, customerFirstName })}
+      />
+      <FormField
+        label="Отчество"
+        value={form.customerMiddleName}
+        inputMode="text"
+        autoComplete="additional-name"
+        onChange={(customerMiddleName) => onChange({ ...form, customerMiddleName })}
+      />
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  value,
+  inputMode,
+  placeholder,
+  autoComplete,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  inputMode: 'decimal' | 'text';
+  placeholder?: string;
+  autoComplete?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="form-field">
+      <span>{label}</span>
+      <input
+        className="form-input"
+        value={value}
+        inputMode={inputMode}
+        placeholder={placeholder}
+        autoComplete={autoComplete ?? 'off'}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    </label>
+  );
+}
+
+function HighlightStack({
+  highlights,
+  tone,
+}: {
+  highlights: readonly string[];
+  tone: 'accent' | 'warning';
+}) {
+  if (highlights.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="warning-stack">
+      {highlights.map((highlight, index) => (
+        <div className={`inline-warning ${tone}`} key={highlight}>
+          {tone === 'accent' ? (
+            <Info size={18} />
+          ) : index === 0 ? (
+            <Clock3 size={18} />
+          ) : (
+            <TriangleAlert size={18} />
+          )}
+          <span>{highlight}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QrCodePanel({ address }: { address: string }) {
+  return (
+    <div className="qr-panel">
+      <span>Отправьте USDT на адрес ниже</span>
+      <QrCodeImage value={address} />
+      <AddressLine label="Адрес для перевода (TRC-20)" value={address} />
+    </div>
+  );
+}
+
+function QrCodeImage({ value }: { value: string }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDataUrl(null);
+    setFailed(false);
+
+    createQrCodeDataUrl(value)
+      .then((nextDataUrl) => {
+        if (!cancelled) {
+          setDataUrl(nextDataUrl);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFailed(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+
+  if (failed) {
+    return <div className="qr-fallback">QR недоступен</div>;
+  }
+
+  if (!dataUrl) {
+    return <div className="qr-fallback">QR</div>;
+  }
+
+  return <img className="qr-image" src={dataUrl} alt="QR код адреса для перевода USDT" />;
+}
+
+function AddressLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="address-line">
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <CopyButton value={value} label={label} />
     </div>
   );
 }
@@ -612,10 +1142,7 @@ function BottomNav({
     <nav className="bottom-nav" aria-label="Нижняя навигация">
       {navItems.map((item) => {
         const Icon = item.icon;
-        const active =
-          item.id === activeScreenId ||
-          (item.id === 'order-detail' && activeScreenId === 'buy') ||
-          (item.id === 'order-detail' && activeScreenId === 'sell');
+        const active = isNavItemActive(item.id, activeScreenId);
 
         return (
           <button
@@ -631,6 +1158,29 @@ function BottomNav({
       })}
     </nav>
   );
+}
+
+function isNavItemActive(itemId: MiniAppScreenId, activeScreenId: MiniAppScreenId): boolean {
+  if (itemId === activeScreenId) {
+    return true;
+  }
+
+  if (
+    itemId === 'home' &&
+    [
+      'about',
+      'buy',
+      'buy-confirm',
+      'buy-created',
+      'sell',
+      'sell-confirm',
+      'sell-created',
+    ].includes(activeScreenId)
+  ) {
+    return true;
+  }
+
+  return itemId === 'history' && activeScreenId === 'order-detail';
 }
 
 function RateCell({ row }: { row?: MiniAppRow }) {
@@ -650,19 +1200,30 @@ type DisplayRow = (MiniAppRow | MiniAppDetailRowViewModel) & {
   copyable?: boolean;
 };
 
-function DataPanel({ row, withCopy }: { row: DisplayRow; withCopy?: boolean }) {
-  const shouldCopy = withCopy ?? row.copyable ?? false;
+function DataPanel({ row }: { row: DisplayRow }) {
+  const shouldCopy = row.copyable ?? false;
 
   return (
     <div className="data-panel">
       <span>{row.label}</span>
       <strong className={`tone-${row.tone ?? 'default'}`}>{row.value}</strong>
-      {shouldCopy && (
-        <button className="copy-button" type="button" aria-label={`Скопировать ${row.label}`}>
-          <Copy size={18} />
-        </button>
-      )}
+      {shouldCopy && <CopyButton value={row.value} label={row.label} />}
     </div>
+  );
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  return (
+    <button
+      className="copy-button"
+      type="button"
+      aria-label={`Скопировать ${label}`}
+      onClick={() => {
+        void navigator.clipboard?.writeText(value);
+      }}
+    >
+      <Copy size={18} />
+    </button>
   );
 }
 
@@ -674,4 +1235,59 @@ function BrandMark() {
       <span />
     </span>
   );
+}
+
+function mergeCustomerIntoBuyForm(
+  form: BuyOrderFormState,
+  customer: UserProfileDto['customer'],
+): BuyOrderFormState {
+  if (!customer) {
+    return form;
+  }
+
+  return {
+    ...form,
+    customerLastName: form.customerLastName || customer.lastName,
+    customerFirstName: form.customerFirstName || customer.firstName,
+    customerMiddleName: form.customerMiddleName || customer.middleName,
+  };
+}
+
+function mergeCustomerIntoSellForm(
+  form: SellOrderFormState,
+  customer: UserProfileDto['customer'],
+): SellOrderFormState {
+  if (!customer) {
+    return form;
+  }
+
+  return {
+    ...form,
+    customerLastName: form.customerLastName || customer.lastName,
+    customerFirstName: form.customerFirstName || customer.firstName,
+    customerMiddleName: form.customerMiddleName || customer.middleName,
+  };
+}
+
+function formatCustomer(customer: MiniAppCustomerInput): string {
+  return `${customer.lastName} ${customer.firstName} ${customer.middleName}`;
+}
+
+function formatDecimal(value: string, fractionDigits: number): string {
+  const [integerPart, fractionalPart = ''] = value.split('.');
+  const formattedInteger = formatInteger(integerPart);
+  const normalizedFraction = fractionalPart.padEnd(fractionDigits, '0').slice(0, fractionDigits);
+
+  return fractionDigits > 0
+    ? `${formattedInteger}.${normalizedFraction}`
+    : formattedInteger;
+}
+
+function formatRub(value: string): string {
+  const [integerPart] = value.split('.');
+  return formatInteger(integerPart);
+}
+
+function formatInteger(value: string): string {
+  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }

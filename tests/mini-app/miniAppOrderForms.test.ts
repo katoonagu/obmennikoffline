@@ -4,6 +4,8 @@ import {
   buildSellOrderInput,
   createInitialBuyOrderForm,
   createInitialSellOrderForm,
+  isBuyOrderFormReady,
+  isSellOrderFormReady,
   normalizeDecimalInput,
 } from '../../src/mini-app/miniAppOrderForms.js';
 
@@ -16,12 +18,31 @@ describe('Mini App editable order forms', () => {
     expect(normalizeDecimalInput('5 000.1234', 6)).toBe('5000.123400');
   });
 
-  it('builds BUY order input from editable user fields', () => {
+  it('starts new order forms empty so users must enter their own wallet and FIO', () => {
+    expect(createInitialBuyOrderForm()).toEqual({
+      amountRub: '',
+      clientPayoutAddress: '',
+      customerLastName: '',
+      customerFirstName: '',
+      customerMiddleName: '',
+    });
+    expect(createInitialSellOrderForm()).toEqual({
+      amountUsdt: '',
+      customerLastName: '',
+      customerFirstName: '',
+      customerMiddleName: '',
+      acceptedTerms: false,
+    });
+  });
+
+  it('builds BUY order input from separate required FIO fields and a full TRC-20 wallet', () => {
     const form = {
       ...createInitialBuyOrderForm(),
       amountRub: '200 000',
       clientPayoutAddress: ` ${PAYOUT_ADDRESS} `,
-      fullName: 'Иванов Иван Иванович',
+      customerLastName: 'Иванов',
+      customerFirstName: 'Иван',
+      customerMiddleName: 'Иванович',
     };
 
     expect(buildBuyOrderInput(form)).toEqual({
@@ -36,13 +57,16 @@ describe('Mini App editable order forms', () => {
         },
       },
     });
+    expect(isBuyOrderFormReady(form)).toBe(true);
   });
 
-  it('builds SELL order input from editable user fields after terms acceptance', () => {
+  it('builds SELL order input from separate required FIO fields after terms acceptance', () => {
     const form = {
       ...createInitialSellOrderForm(),
       amountUsdt: '5 000',
-      fullName: 'Иванов Иван Иванович',
+      customerLastName: 'Иванов',
+      customerFirstName: 'Иван',
+      customerMiddleName: 'Иванович',
       acceptedTerms: true,
     };
 
@@ -57,6 +81,7 @@ describe('Mini App editable order forms', () => {
         },
       },
     });
+    expect(isSellOrderFormReady(form)).toBe(true);
   });
 
   it('returns client-facing validation errors before hitting the API', () => {
@@ -64,7 +89,9 @@ describe('Mini App editable order forms', () => {
       ...createInitialBuyOrderForm(),
       amountRub: '',
       clientPayoutAddress: PAYOUT_ADDRESS,
-      fullName: 'Иванов Иван Иванович',
+      customerLastName: 'Иванов',
+      customerFirstName: 'Иван',
+      customerMiddleName: 'Иванович',
     })).toEqual({
       ok: false,
       message: 'Введите сумму в рублях',
@@ -72,29 +99,43 @@ describe('Mini App editable order forms', () => {
     expect(buildBuyOrderInput({
       ...createInitialBuyOrderForm(),
       amountRub: '200000',
-      clientPayoutAddress: '',
-      fullName: 'Иванов Иван Иванович',
+      clientPayoutAddress: 'TXxx...9Qm',
+      customerLastName: 'Иванов',
+      customerFirstName: 'Иван',
+      customerMiddleName: 'Иванович',
     })).toEqual({
       ok: false,
-      message: 'Введите TRC-20 кошелек для получения USDT',
+      message: 'Введите корректный TRC-20 кошелек для получения USDT',
     });
     expect(buildSellOrderInput({
       ...createInitialSellOrderForm(),
       amountUsdt: '5000',
-      fullName: 'Иван',
+      customerLastName: 'Иванов',
+      customerFirstName: '',
+      customerMiddleName: 'Иванович',
       acceptedTerms: true,
     })).toEqual({
       ok: false,
-      message: 'Введите ФИО полностью: фамилия, имя и отчество',
+      message: 'Введите имя',
     });
     expect(buildSellOrderInput({
       ...createInitialSellOrderForm(),
       amountUsdt: '5000',
-      fullName: 'Иванов Иван Иванович',
+      customerLastName: 'Иванов',
+      customerFirstName: 'Иван',
+      customerMiddleName: 'Иванович',
       acceptedTerms: false,
     })).toEqual({
       ok: false,
       message: 'Примите правила и условия обмена',
     });
+    expect(isBuyOrderFormReady({
+      ...createInitialBuyOrderForm(),
+      amountRub: '200000',
+      clientPayoutAddress: 'TXxx...9Qm',
+      customerLastName: 'Иванов',
+      customerFirstName: 'Иван',
+      customerMiddleName: 'Иванович',
+    })).toBe(false);
   });
 });

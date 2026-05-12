@@ -29,40 +29,41 @@ describe('Telegram Mini App frontend contract', () => {
     expect(designDoc).toContain('#12DCEF');
   });
 
-  it('defines all first-slice user screens with Russian UI labels', () => {
+  it('defines the reference-flow user screens with Russian UI labels', () => {
     expect(miniAppScreens.map((screen) => screen.id)).toEqual([
       'home',
+      'about',
       'buy',
+      'buy-confirm',
+      'buy-created',
       'sell',
+      'sell-confirm',
+      'sell-created',
       'order-detail',
+      'history',
       'profile',
     ]);
 
-    expect(miniAppScreens[0]!.title).toBe('Моментальный обмен USDT');
-    expect(miniAppScreens[1]!.title).toBe('Купить USDT');
-    expect(miniAppScreens[2]!.title).toBe('Продать USDT');
-    expect(miniAppScreens[3]!.title).toBe('Детали заявки');
-    expect(miniAppScreens[4]!.title).toBe('Профиль');
+    expect(miniAppScreens.find((screen) => screen.id === 'home')?.title).toBe('Моментальный обмен USDT');
+    expect(miniAppScreens.find((screen) => screen.id === 'about')?.title).toBe('О нас');
+    expect(miniAppScreens.find((screen) => screen.id === 'buy')?.title).toBe('Купить USDT');
+    expect(miniAppScreens.find((screen) => screen.id === 'sell')?.title).toBe('Продать USDT');
+    expect(miniAppScreens.find((screen) => screen.id === 'history')?.title).toBe('История');
+    expect(miniAppScreens.find((screen) => screen.id === 'profile')?.title).toBe('Профиль');
   });
 
-  it('preserves the BUY and SELL wallet logic in frontend copy', () => {
+  it('preserves the BUY and SELL wallet logic in frontend copy without masked BUY wallets', () => {
     const buyScreen = miniAppScreens.find((screen) => screen.id === 'buy')!;
+    const buyConfirmScreen = miniAppScreens.find((screen) => screen.id === 'buy-confirm')!;
     const sellScreen = miniAppScreens.find((screen) => screen.id === 'sell')!;
-    const detailScreen = miniAppScreens.find((screen) => screen.id === 'order-detail')!;
+    const sellCreatedScreen = miniAppScreens.find((screen) => screen.id === 'sell-created')!;
 
-    expect(buyScreen.highlights).toContain('USDT будет отправлен на ваш TRC-20 кошелек после оплаты в офисе.');
-    expect(buyScreen.rows).toContainEqual({
-      label: 'Кошелек для получения (TRC-20)',
-      value: 'TXxx...9Qm',
-      tone: 'mono',
-    });
-    expect(sellScreen.highlights).toContain('Курс фиксируется на 20 минут');
-    expect(sellScreen.highlights).toContain('Переведите USDT одной транзакцией');
-    expect(detailScreen.rows).toContainEqual({
-      label: 'Адрес для перевода (TRC-20)',
-      value: 'TXxx...9Qm',
-      tone: 'mono',
-    });
+    expect(buyScreen.highlights).toContain('Введите свой TRC-20 кошелек полностью.');
+    expect(buyConfirmScreen.highlights).toContain('USDT будет отправлен на указанный вами TRC-20 кошелек после оплаты в офисе.');
+    expect(JSON.stringify(buyScreen)).not.toContain('TXxx...9Qm');
+    expect(JSON.stringify(buyConfirmScreen)).not.toContain('TXxx...9Qm');
+    expect(sellScreen.highlights).toContain('Адрес для перевода появится только после создания заявки.');
+    expect(sellCreatedScreen.highlights).toContain('Переведите USDT одной транзакцией в сети Tron (TRC-20).');
   });
 
   it('adds isolated frontend scripts and Vite entry files', () => {

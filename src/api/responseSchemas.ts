@@ -108,6 +108,13 @@ export const ordersResponseSchema = z.strictObject({
 export const profileResponseSchema = z.strictObject({
   profile: z.strictObject({
     userId: z.string(),
+    customer: z
+      .strictObject({
+        lastName: z.string(),
+        firstName: z.string(),
+        middleName: z.string(),
+      })
+      .nullable(),
     telegram: z
       .strictObject({
         telegramUserId: z.string(),

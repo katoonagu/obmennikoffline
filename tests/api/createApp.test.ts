@@ -134,6 +134,12 @@ function createTx(input?: {
         ...data,
       })),
     },
+    user: {
+      update: vi.fn(async ({ data }) => ({
+        id: 'user-1',
+        ...data,
+      })),
+    },
   };
 }
 
@@ -170,6 +176,17 @@ function createDb(
 
   return {
     _tx: tx,
+    user: {
+      findUnique: vi.fn(async () => ({
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      })),
+      update: vi.fn(async ({ data }) => ({
+        id: 'user-1',
+        ...data,
+      })),
+    },
     order: {
       create: vi.fn(async ({ data }) => createPersistedOrder(data)),
       findMany: vi.fn(async () => options.readOrders ?? []),
@@ -1862,7 +1879,17 @@ describe('createApiApp', () => {
     expect(rateProvider.getUsdtRubRates).toHaveBeenCalledWith({
       now: NOW,
     });
-    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(db._tx.user.update).toHaveBeenCalledWith({
+      where: {
+        id: 'user-1',
+      },
+      data: {
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
+    });
     await app.close();
   });
 
@@ -2200,6 +2227,11 @@ describe('createApiApp', () => {
     expect(response.json()).toEqual({
       profile: {
         userId: 'user-1',
+        customer: {
+          lastName: 'Alekseev',
+          firstName: 'Pavel',
+          middleName: 'Astrakhanov',
+        },
         telegram: {
           telegramUserId: '462656683',
           username: 'pavel',
@@ -2273,11 +2305,21 @@ describe('createApiApp', () => {
         telegramUserId: true,
       },
     });
-    expect(db.order.create).toHaveBeenCalledWith({
+    expect(db._tx.order.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         publicId: 'E97012',
         userId: 'telegram-user-1',
       }),
+    });
+    expect(db._tx.user.update).toHaveBeenCalledWith({
+      where: {
+        id: 'telegram-user-1',
+      },
+      data: {
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
     });
     await app.close();
   });
@@ -2492,6 +2534,16 @@ describe('createApiApp', () => {
         userId: 'telegram-user-1',
         depositAddressId: 'addr-1',
       }),
+    });
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: {
+        id: 'telegram-user-1',
+      },
+      data: {
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
     });
     await app.close();
   });

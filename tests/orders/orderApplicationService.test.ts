@@ -29,6 +29,12 @@ function createDb(
     order: {
       create: vi.fn(async ({ data }) => createPersistedOrder(data)),
     },
+    user: {
+      update: vi.fn(async ({ data }) => ({
+        id: 'user-1',
+        ...data,
+      })),
+    },
     $transaction: vi.fn(async (fn) => fn(tx)),
   };
 }
@@ -47,6 +53,12 @@ function createTx(input?: {
       findFirst: vi.fn(async () => candidates.shift() ?? null),
       updateMany: vi.fn(async () => ({ count: updateCounts.shift() ?? 0 })),
     },
+    user: {
+      update: vi.fn(async ({ data }) => ({
+        id: 'user-1',
+        ...data,
+      })),
+    },
     order: {
       create: vi.fn(async ({ data }) => createPersistedOrder(data)),
     },
@@ -54,7 +66,7 @@ function createTx(input?: {
 }
 
 describe('orderApplicationService', () => {
-  it('persists BUY_USDT orders without a deposit address transaction', async () => {
+  it('atomically persists BUY_USDT orders and updates the user customer profile', async () => {
     const tx = createTx();
     const db = createDb(tx);
 
@@ -81,14 +93,24 @@ describe('orderApplicationService', () => {
       clientPayoutAddress: PAYOUT_ADDRESS,
     });
 
-    expect(db.order.create).toHaveBeenCalledWith({
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: {
+        id: 'user-1',
+      },
+      data: {
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
+    });
+    expect(tx.order.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         publicId: 'E97010',
         direction: 'BUY_USDT',
         depositAddressId: null,
       }),
     });
-    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('atomically reserves a deposit address and persists SELL_USDT orders', async () => {
@@ -150,6 +172,16 @@ describe('orderApplicationService', () => {
         depositAddressId: 'addr-1',
         status: 'awaiting_deposit',
       }),
+    });
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: {
+        id: 'user-1',
+      },
+      data: {
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      },
     });
   });
 

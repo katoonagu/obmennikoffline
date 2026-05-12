@@ -39,6 +39,7 @@ export interface MiniAppOrderDetailViewModel {
 export interface MiniAppProfileViewModel {
   telegramIdLabel: string;
   usernameLabel: string;
+  customerNameLabel: string;
   totalOrdersLabel: string;
   activeOrdersLabel: string;
 }
@@ -94,6 +95,10 @@ export function createMiniAppOrderDetailViewModel(
       value: `${formatDecimal(order.rateSnapshot, 2)} ₽`,
       tone: 'mono',
     },
+    {
+      label: 'ФИО',
+      value: formatCustomerName(order.customer),
+    },
   ];
 
   if (order.depositAddress) {
@@ -126,11 +131,13 @@ export function createMiniAppOrderDetailViewModel(
     },
   );
 
+  const status = formatOrderStatus(order.status);
+
   return {
     title: 'Детали заявки',
     publicId: order.publicId,
-    statusLabel: formatOrderStatus(order.status).label,
-    statusTone: formatOrderStatus(order.status).tone,
+    statusLabel: status.label,
+    statusTone: status.tone,
     qrValue: order.depositAddress,
     rows,
     primaryAmountLabel: getOrderPrimaryAmount(order),
@@ -148,6 +155,9 @@ export function createMiniAppProfileViewModel(
     usernameLabel: profile.telegram?.username
       ? `@${profile.telegram.username}`
       : 'Без username',
+    customerNameLabel: profile.customer
+      ? formatCustomerName(profile.customer)
+      : 'ФИО не заполнено',
     totalOrdersLabel: profile.stats.totalOrders.toString(),
     activeOrdersLabel: profile.stats.activeOrders.toString(),
   };
@@ -208,6 +218,14 @@ function formatOrderStatus(status: OrderDto['status']): {
     case 'draft':
       return { label: 'Черновик', tone: 'default' };
   }
+}
+
+function formatCustomerName(customer: {
+  lastName: string;
+  firstName: string;
+  middleName: string;
+}): string {
+  return `${customer.lastName} ${customer.firstName} ${customer.middleName}`;
 }
 
 function formatDecimal(value: string, fractionDigits: number): string {

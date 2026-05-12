@@ -57,6 +57,13 @@ function createDb(input?: {
   const countByCall = input?.countByCall ?? [2, 1];
 
   return {
+    user: {
+      findUnique: vi.fn(async () => ({
+        customerLastName: 'Alekseev',
+        customerFirstName: 'Pavel',
+        customerMiddleName: 'Astrakhanov',
+      })),
+    },
     order: {
       findMany: vi.fn(async () => input?.orders ?? []),
       findFirst: vi.fn(async () => input?.order ?? null),
@@ -327,6 +334,11 @@ describe('orderReadService', () => {
 
     await expect(getUserProfile(db, { userId: 'user-1' })).resolves.toEqual({
       userId: 'user-1',
+      customer: {
+        lastName: 'Alekseev',
+        firstName: 'Pavel',
+        middleName: 'Astrakhanov',
+      },
       telegram: {
         telegramUserId: '462656683',
         username: 'pavel',
@@ -339,6 +351,16 @@ describe('orderReadService', () => {
       },
     });
 
+    expect(db.user.findUnique).toHaveBeenCalledWith({
+      where: {
+        id: 'user-1',
+      },
+      select: {
+        customerLastName: true,
+        customerFirstName: true,
+        customerMiddleName: true,
+      },
+    });
     expect(db.telegramProfile.findUnique).toHaveBeenCalledWith({
       where: {
         userId: 'user-1',
