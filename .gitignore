@@ -7,3 +7,7 @@ dist/
 worktrees/
 address-pool*.csv
 *.log
+
+# Local reference screenshots can contain personal or operational data.
+docs/reference-screenshots/exchar_bot/*
+!docs/reference-screenshots/exchar_bot/.gitkeep
