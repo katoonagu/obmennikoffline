@@ -255,7 +255,12 @@ export function createApiApp<TOrder>(
         parseBody(emptyQuerySchema, request.query);
         const requestNow = now();
         const body = parseBody(adminSessionBodySchema, request.body);
-        assertAdminLoginNotRateLimited(adminLoginFailures, body.username, requestNow);
+        assertAdminLoginNotRateLimited(
+          adminLoginFailures,
+          request.ip,
+          body.username,
+          requestNow,
+        );
 
         let result;
         try {
@@ -271,11 +276,16 @@ export function createApiApp<TOrder>(
             error instanceof Error &&
             error.message === 'admin credentials are invalid'
           ) {
-            recordAdminLoginFailure(adminLoginFailures, body.username, requestNow);
+            recordAdminLoginFailure(
+              adminLoginFailures,
+              request.ip,
+              body.username,
+              requestNow,
+            );
           }
           throw error;
         }
-        resetAdminLoginFailures(adminLoginFailures, body.username);
+        resetAdminLoginFailures(adminLoginFailures, request.ip, body.username);
 
         return reply.send(validateApiResponse(adminSessionResponseSchema, result));
       });
@@ -679,10 +689,11 @@ interface AdminLoginFailureState {
 
 function assertAdminLoginNotRateLimited(
   failures: Map<string, AdminLoginFailureState>,
+  ip: string,
   username: string,
   now: Date,
 ): void {
-  const key = normalizeAdminLoginRateLimitKey(username);
+  const key = createAdminLoginRateLimitKey(ip, username);
   const state = failures.get(key);
   if (!state) {
     return;
@@ -700,10 +711,11 @@ function assertAdminLoginNotRateLimited(
 
 function recordAdminLoginFailure(
   failures: Map<string, AdminLoginFailureState>,
+  ip: string,
   username: string,
   now: Date,
 ): void {
-  const key = normalizeAdminLoginRateLimitKey(username);
+  const key = createAdminLoginRateLimitKey(ip, username);
   const state = failures.get(key);
   if (!state || now.getTime() - state.firstFailedAtMs >= ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS) {
     failures.set(key, {
@@ -721,13 +733,14 @@ function recordAdminLoginFailure(
 
 function resetAdminLoginFailures(
   failures: Map<string, AdminLoginFailureState>,
+  ip: string,
   username: string,
 ): void {
-  failures.delete(normalizeAdminLoginRateLimitKey(username));
+  failures.delete(createAdminLoginRateLimitKey(ip, username));
 }
 
-function normalizeAdminLoginRateLimitKey(username: string): string {
-  return username.trim().toLowerCase();
+function createAdminLoginRateLimitKey(ip: string, username: string): string {
+  return `${ip.trim() || 'unknown-ip'}|${username.trim().toLowerCase()}`;
 }
 
 async function getUsdtRubRates(input: {

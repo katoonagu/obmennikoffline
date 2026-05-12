@@ -709,6 +709,245 @@ describe('createApiApp', () => {
     await app.close();
   });
 
+  it('does not share admin login rate limits across different IP addresses', async () => {
+    const db = createDb({
+      adminUser: {
+        id: 'admin-1',
+        username: 'manager-1',
+        passwordHash: hashAdminPassword(ADMIN_PASSWORD, {
+          salt: Buffer.alloc(16, 31),
+        }),
+        role: 'manager',
+        disabledAt: null,
+      },
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      adminSessionSecret: ADMIN_SESSION_SECRET,
+      now: () => NOW,
+      publicIdFactory: () => 'E100001',
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/session',
+        remoteAddress: '203.0.113.10',
+        payload: {
+          username: 'manager-1',
+          password: 'wrong password value',
+        },
+      });
+      expect(response.statusCode).toBe(401);
+    }
+
+    const otherIpResponse = await app.inject({
+      method: 'POST',
+      url: '/api/admin/session',
+      remoteAddress: '203.0.113.11',
+      payload: {
+        username: 'manager-1',
+        password: ADMIN_PASSWORD,
+      },
+    });
+
+    expect(otherIpResponse.statusCode).toBe(200);
+    expect(db.adminUser.findUnique).toHaveBeenCalledTimes(6);
+    await app.close();
+  });
+
+  it('aggregates admin login failures for username casing variants from the same IP', async () => {
+    const db = createDb({
+      adminUser: {
+        id: 'admin-1',
+        username: 'manager-1',
+        passwordHash: hashAdminPassword(ADMIN_PASSWORD, {
+          salt: Buffer.alloc(16, 32),
+        }),
+        role: 'manager',
+        disabledAt: null,
+      },
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      adminSessionSecret: ADMIN_SESSION_SECRET,
+      now: () => NOW,
+      publicIdFactory: () => 'E100001',
+    });
+
+    const usernameVariants = [
+      'manager-1',
+      ' Manager-1 ',
+      'MANAGER-1',
+      'manager-1',
+      ' Manager-1 ',
+    ];
+    for (const username of usernameVariants) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/session',
+        remoteAddress: '203.0.113.20',
+        payload: {
+          username,
+          password: 'wrong password value',
+        },
+      });
+      expect(response.statusCode).toBe(401);
+    }
+
+    const limitedResponse = await app.inject({
+      method: 'POST',
+      url: '/api/admin/session',
+      remoteAddress: '203.0.113.20',
+      payload: {
+        username: 'manager-1',
+        password: ADMIN_PASSWORD,
+      },
+    });
+
+    expect(limitedResponse.statusCode).toBe(429);
+    expect(db.adminUser.findUnique).toHaveBeenCalledTimes(5);
+    await app.close();
+  });
+
+  it('resets admin login failures after a successful login from the same IP', async () => {
+    const db = createDb({
+      adminUser: {
+        id: 'admin-1',
+        username: 'manager-1',
+        passwordHash: hashAdminPassword(ADMIN_PASSWORD, {
+          salt: Buffer.alloc(16, 33),
+        }),
+        role: 'manager',
+        disabledAt: null,
+      },
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      adminSessionSecret: ADMIN_SESSION_SECRET,
+      now: () => NOW,
+      publicIdFactory: () => 'E100001',
+    });
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/session',
+        remoteAddress: '203.0.113.30',
+        payload: {
+          username: 'manager-1',
+          password: 'wrong password value',
+        },
+      });
+      expect(response.statusCode).toBe(401);
+    }
+
+    const resetResponse = await app.inject({
+      method: 'POST',
+      url: '/api/admin/session',
+      remoteAddress: '203.0.113.30',
+      payload: {
+        username: 'manager-1',
+        password: ADMIN_PASSWORD,
+      },
+    });
+    expect(resetResponse.statusCode).toBe(200);
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/session',
+        remoteAddress: '203.0.113.30',
+        payload: {
+          username: 'manager-1',
+          password: 'wrong password value',
+        },
+      });
+      expect(response.statusCode).toBe(401);
+    }
+
+    const secondSuccessResponse = await app.inject({
+      method: 'POST',
+      url: '/api/admin/session',
+      remoteAddress: '203.0.113.30',
+      payload: {
+        username: 'manager-1',
+        password: ADMIN_PASSWORD,
+      },
+    });
+    expect(secondSuccessResponse.statusCode).toBe(200);
+    expect(db.adminUser.findUnique).toHaveBeenCalledTimes(10);
+    await app.close();
+  });
+
+  it('expires admin login failure windows after fifteen minutes', async () => {
+    let currentNow = NOW;
+    const db = createDb({
+      adminUser: {
+        id: 'admin-1',
+        username: 'manager-1',
+        passwordHash: hashAdminPassword(ADMIN_PASSWORD, {
+          salt: Buffer.alloc(16, 34),
+        }),
+        role: 'manager',
+        disabledAt: null,
+      },
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      adminSessionSecret: ADMIN_SESSION_SECRET,
+      now: () => currentNow,
+      publicIdFactory: () => 'E100001',
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/session',
+        remoteAddress: '203.0.113.40',
+        payload: {
+          username: 'manager-1',
+          password: 'wrong password value',
+        },
+      });
+      expect(response.statusCode).toBe(401);
+    }
+
+    const limitedResponse = await app.inject({
+      method: 'POST',
+      url: '/api/admin/session',
+      remoteAddress: '203.0.113.40',
+      payload: {
+        username: 'manager-1',
+        password: ADMIN_PASSWORD,
+      },
+    });
+    expect(limitedResponse.statusCode).toBe(429);
+
+    currentNow = new Date(NOW.getTime() + 15 * 60 * 1000);
+    const expiredWindowResponse = await app.inject({
+      method: 'POST',
+      url: '/api/admin/session',
+      remoteAddress: '203.0.113.40',
+      payload: {
+        username: 'manager-1',
+        password: ADMIN_PASSWORD,
+      },
+    });
+
+    expect(expiredWindowResponse.statusCode).toBe(200);
+    expect(db.adminUser.findUnique).toHaveBeenCalledTimes(6);
+    await app.close();
+  });
+
   it('authorizes admin mutations with an admin session token and audits the session username', async () => {
     const db = createDb({
       adminUser: {
