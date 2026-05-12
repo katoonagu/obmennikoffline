@@ -23,6 +23,12 @@ Run one order expiration pass:
 pnpm orders:expire-open
 ```
 
+Run the staging smoke suite after build:
+
+```powershell
+pnpm staging:smoke
+```
+
 ## Scheduler Rules
 
 - Run each command with the same `DATABASE_URL` and environment as the API.
@@ -35,6 +41,11 @@ pnpm orders:expire-open
   `ADMIN_API_TOKEN` must be at least 32 characters, must not contain
   whitespace, must not be a repeated placeholder, and must be distinct from `TELEGRAM_BOT_TOKEN`.
   No empty or duplicate actor ids are allowed in `ADMIN_ACTOR_IDS`.
+- `pnpm staging:smoke` validates production config guard inputs and TRON
+  provider connectivity with a read-only latest-block call. It performs no mainnet transaction. If `TELEGRAM_INIT_DATA` is present, it also validates the
+  real Telegram Mini App initData signature; otherwise that check is reported as
+  skipped. The report contains sanitized `productionConfig`, `tronProvider`, and
+  `telegramInitData` checks and must not be treated as a wallet or payout test.
 - Provision the first admin account before exposing admin operations:
 
 ```powershell

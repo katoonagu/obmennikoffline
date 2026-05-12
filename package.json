@@ -18,7 +18,8 @@
     "admin:disable-user": "node dist/src/admin/disableAdminUserCli.js",
     "tron:watch-deposits-once": "node dist/src/tron/watchDepositsOnceCli.js",
     "tron:configure-watcher-cursor": "node dist/src/tron/configureWatcherCursorCli.js",
-    "orders:expire-open": "node dist/src/orders/expireOrdersCli.js"
+    "orders:expire-open": "node dist/src/orders/expireOrdersCli.js",
+    "staging:smoke": "node dist/src/smoke/stagingSmokeCli.js"
   },
   "dependencies": {
     "@fontsource/manrope": "^5.2.8",

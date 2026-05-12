@@ -268,11 +268,17 @@ Optional in local development:
 
 ```env
 TELEGRAM_BOT_TOKEN=""
+TELEGRAM_INIT_DATA=""
 ADMIN_API_TOKEN=""
 TELEGRAM_INIT_DATA_MAX_AGE_SECONDS="86400"
 ADMIN_USERNAME="manager-1"
 ADMIN_PASSWORD=""
 ```
+
+`TELEGRAM_INIT_DATA` is an optional one-shot staging smoke input. Paste a fresh
+Telegram WebApp initData string only into local/private env when validating real
+Mini App auth. Do not commit it. Without it, `pnpm staging:smoke` reports the
+`telegramInitData` check as `skipped` rather than failed.
 
 Optional one-shot job env:
 
@@ -352,6 +358,20 @@ Production API runs from built JavaScript through your process manager after
 `ADMIN_API_TOKEN` in the process environment. Set `ADMIN_ACTOR_IDS` to the
 comma-separated manager actor ids accepted in `x-admin-actor-id`. No empty or
 duplicate actor ids are allowed.
+
+Run the staging smoke suite after `pnpm build` to validate production guard
+settings and read-only provider connectivity without making a mainnet
+transaction:
+
+```powershell
+pnpm build
+pnpm staging:smoke
+```
+
+The JSON report contains sanitized `productionConfig`, `tronProvider`, and
+`telegramInitData` checks. It reports whether secrets are configured, but never
+prints `ADMIN_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TRON_API_KEY`, or raw
+`TELEGRAM_INIT_DATA`.
 
 ## Admin Account Provisioning
 

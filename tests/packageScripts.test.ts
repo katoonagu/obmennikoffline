@@ -25,4 +25,10 @@ describe('package scripts', () => {
       'node dist/src/orders/expireOrdersCli.js',
     );
   });
+
+  it('runs the staging smoke suite from built JavaScript', () => {
+    expect(packageJson.scripts['staging:smoke']).toBe(
+      'node dist/src/smoke/stagingSmokeCli.js',
+    );
+  });
 });

@@ -40,6 +40,9 @@ describe('operations documentation contracts', () => {
     expect(runbook).toContain('Admin mutation comments are optional audit text');
     expect(runbook).toContain('trimmed and capped at 500 characters');
     expect(runbook).toContain('Authorization: tma <initData>');
+    expect(runbook).toContain('pnpm staging:smoke');
+    expect(runbook).toContain('TELEGRAM_INIT_DATA');
+    expect(runbook).toContain('no mainnet transaction');
   });
 
   it('keeps externally blocked work visible outside the README', () => {

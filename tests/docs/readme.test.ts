@@ -50,6 +50,11 @@ describe('README runbook', () => {
     expect(readme).toContain('pnpm tron:configure-watcher-cursor');
     expect(readme).toContain('pnpm tron:watch-deposits-once');
     expect(readme).toContain('pnpm orders:expire-open');
+    expect(readme).toContain('pnpm staging:smoke');
+    expect(readme).toContain('TELEGRAM_INIT_DATA');
+    expect(readme).toContain('productionConfig');
+    expect(readme).toContain('tronProvider');
+    expect(readme).toContain('telegramInitData');
     expect(readme).toContain('Local Docker Postgres');
   });
 

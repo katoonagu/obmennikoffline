@@ -13,6 +13,8 @@ describe('.env.example contract', () => {
     expect(envExample).toContain('TELEGRAM_BOT_TOKEN');
     expect(envExample).toContain('<numeric-bot-id>:<bot-token-secret>');
     expect(envExample).toContain('at least 30 URL-safe characters');
+    expect(envExample).toContain('TELEGRAM_INIT_DATA=""');
+    expect(envExample).toContain('Optional one-shot staging smoke input');
     expect(envExample).toContain('TELEGRAM_INIT_DATA_MAX_AGE_SECONDS');
     expect(envExample).toContain('ADMIN_API_TOKEN');
     expect(envExample).toContain('ADMIN_USERNAME');
