@@ -14,14 +14,31 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   miniAppBrand,
   miniAppScreens,
   type MiniAppRow,
   type MiniAppScreen,
   type MiniAppScreenId,
+  type MiniAppTone,
 } from './miniAppContent.js';
+import {
+  createMockMiniAppApi,
+  miniAppMockFixtures,
+  type MiniAppApi,
+} from './miniAppApi.js';
+import type { OrderDto, UserProfileDto } from '../orders/orderReadService.js';
+import type { UsdtRubRates } from '../rates/rateQuoteService.js';
+import {
+  createMiniAppHomeViewModel,
+  createMiniAppOrderDetailViewModel,
+  createMiniAppProfileViewModel,
+  type MiniAppDetailRowViewModel,
+  type MiniAppHomeViewModel,
+  type MiniAppOrderDetailViewModel,
+  type MiniAppProfileViewModel,
+} from './miniAppViewModel.js';
 
 const screenById = new Map<MiniAppScreenId, MiniAppScreen>(
   miniAppScreens.map((screen) => [screen.id, screen]),
@@ -32,6 +49,14 @@ const navItems: Array<{ id: MiniAppScreenId; label: string; icon: LucideIcon }> 
   { id: 'order-detail', label: 'История', icon: Timer },
   { id: 'profile', label: 'Профиль', icon: User },
 ];
+
+const sampleCustomer = {
+  lastName: 'Ivanov',
+  firstName: 'Ivan',
+  middleName: 'Ivanovich',
+};
+
+const samplePayoutAddress = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
 
 function getScreen(id: MiniAppScreenId): MiniAppScreen {
   const screen = screenById.get(id);
@@ -45,7 +70,81 @@ function getScreen(id: MiniAppScreenId): MiniAppScreen {
 
 export function App() {
   const [activeScreenId, setActiveScreenId] = useState<MiniAppScreenId>('home');
+  const [api] = useState<MiniAppApi>(() => createMockMiniAppApi());
+  const [rates, setRates] = useState<UsdtRubRates>(miniAppMockFixtures.rates);
+  const [activeOrders, setActiveOrders] = useState<OrderDto[]>([
+    miniAppMockFixtures.sellOrder,
+  ]);
+  const [selectedOrder, setSelectedOrder] = useState<OrderDto | null>(
+    miniAppMockFixtures.sellOrder,
+  );
+  const [profile, setProfile] = useState<UserProfileDto>(miniAppMockFixtures.profile);
+  const [loadingLabel, setLoadingLabel] = useState('Загрузка данных');
   const activeScreen = useMemo(() => getScreen(activeScreenId), [activeScreenId]);
+  const homeModel = useMemo<MiniAppHomeViewModel>(
+    () => createMiniAppHomeViewModel({ rates, activeOrders }),
+    [activeOrders, rates],
+  );
+  const detailModel = useMemo<MiniAppOrderDetailViewModel | null>(
+    () => selectedOrder ? createMiniAppOrderDetailViewModel(selectedOrder) : null,
+    [selectedOrder],
+  );
+  const profileModel = useMemo<MiniAppProfileViewModel>(
+    () => createMiniAppProfileViewModel(profile),
+    [profile],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.all([
+      api.loadRates(),
+      api.listActiveOrders({ limit: 5 }),
+      api.getProfile(),
+    ])
+      .then(([loadedRates, loadedOrders, loadedProfile]) => {
+        if (cancelled) return;
+        setRates(loadedRates);
+        setActiveOrders(loadedOrders);
+        setSelectedOrder(loadedOrders[0] ?? null);
+        setProfile(loadedProfile);
+        setLoadingLabel('');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadingLabel('Не удалось обновить данные');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+
+  async function refreshActiveOrders(nextSelectedOrder?: OrderDto) {
+    const loadedOrders = await api.listActiveOrders({ limit: 5 });
+    setActiveOrders(loadedOrders);
+    setSelectedOrder(nextSelectedOrder ?? loadedOrders[0] ?? null);
+  }
+
+  async function handleCreateBuyOrder() {
+    const order = await api.createBuyOrder({
+      customer: sampleCustomer,
+      amountRub: '200000.00',
+      clientPayoutAddress: samplePayoutAddress,
+    });
+    await refreshActiveOrders(order);
+    setActiveScreenId('order-detail');
+  }
+
+  async function handleCreateSellOrder() {
+    const order = await api.createSellOrder({
+      customer: sampleCustomer,
+      amountUsdt: '5000.000000',
+    });
+    await refreshActiveOrders(order);
+    setActiveScreenId('order-detail');
+  }
 
   return (
     <main className="mini-app-shell">
@@ -62,23 +161,41 @@ export function App() {
         />
 
         <section className="screen-scroll">
+          {loadingLabel && <div className="sync-banner">{loadingLabel}</div>}
           {activeScreen.id === 'home' && (
-            <HomeScreen onNavigate={setActiveScreenId} />
+            <HomeScreen
+              model={homeModel}
+              onNavigate={setActiveScreenId}
+              onOpenOrder={(publicId) => {
+                const order = activeOrders.find((candidate) => candidate.publicId === publicId);
+                setSelectedOrder(order ?? null);
+                setActiveScreenId('order-detail');
+              }}
+            />
           )}
           {activeScreen.id === 'buy' && (
-            <FlowScreen screen={activeScreen} variant="buy" />
+            <FlowScreen
+              screen={activeScreen}
+              variant="buy"
+              onCreate={handleCreateBuyOrder}
+            />
           )}
           {activeScreen.id === 'sell' && (
             <FlowScreen
               screen={activeScreen}
               variant="sell"
-              onCreate={() => setActiveScreenId('order-detail')}
+              onCreate={handleCreateSellOrder}
             />
           )}
           {activeScreen.id === 'order-detail' && (
-            <OrderDetailScreen screen={activeScreen} onHome={() => setActiveScreenId('home')} />
+            <OrderDetailScreen
+              model={detailModel}
+              onHome={() => setActiveScreenId('home')}
+            />
           )}
-          {activeScreen.id === 'profile' && <ProfileScreen screen={activeScreen} />}
+          {activeScreen.id === 'profile' && (
+            <ProfileScreen screen={activeScreen} model={profileModel} />
+          )}
         </section>
 
         <BottomNav activeScreenId={activeScreenId} onNavigate={setActiveScreenId} />
@@ -118,16 +235,20 @@ function AppHeader({
   );
 }
 
-function HomeScreen({ onNavigate }: { onNavigate: (screen: MiniAppScreenId) => void }) {
-  const home = getScreen('home');
-  const buyRate = home.rows.find((row) => row.label === 'Купить');
-  const sellRate = home.rows.find((row) => row.label === 'Продать');
-
+function HomeScreen({
+  model,
+  onNavigate,
+  onOpenOrder,
+}: {
+  model: MiniAppHomeViewModel;
+  onNavigate: (screen: MiniAppScreenId) => void;
+  onOpenOrder: (publicId: string) => void;
+}) {
   return (
     <div className="screen-stack home-screen">
       <div className="hero-block">
         <p className="mini-kicker">{miniAppBrand.tagline}</p>
-        <h2>{home.title}</h2>
+        <h2>{getScreen('home').title}</h2>
         <p>{miniAppBrand.promise}</p>
       </div>
 
@@ -143,18 +264,27 @@ function HomeScreen({ onNavigate }: { onNavigate: (screen: MiniAppScreenId) => v
       </div>
 
       <div className="rate-strip">
-        <RateCell row={buyRate} />
-        <RateCell row={sellRate} />
+        <RateCell row={{ label: 'Купить', value: model.rates.buy, tone: 'accent' }} />
+        <RateCell row={{ label: 'Продать', value: model.rates.sell, tone: 'cyan' }} />
       </div>
 
       <section className="section-block" aria-labelledby="active-orders-title">
         <h3 id="active-orders-title">Активные заявки</h3>
-        <button className="order-card" type="button" onClick={() => onNavigate('order-detail')}>
-          <span className="order-card-title">Продажа 5 000.00 USDT</span>
-          <span className="status-badge">В ожидании</span>
-          <span className="order-card-meta">ID: E00001</span>
-          <span className="order-card-meta">11 мая 2026, 14:05</span>
-        </button>
+        {model.activeOrders.map((order) => (
+          <button
+            className="order-card"
+            type="button"
+            key={order.publicId}
+            onClick={() => onOpenOrder(order.publicId)}
+          >
+            <span className="order-card-title">{order.title}</span>
+            <span className={`status-badge tone-${order.statusTone}`}>
+              {order.statusLabel}
+            </span>
+            <span className="order-card-meta">ID: {order.publicId}</span>
+            <span className="order-card-meta">{order.createdAtLabel}</span>
+          </button>
+        ))}
       </section>
     </div>
   );
@@ -202,42 +332,72 @@ function FlowScreen({
 }
 
 function OrderDetailScreen({
-  screen,
+  model,
   onHome,
 }: {
-  screen: MiniAppScreen;
+  model: MiniAppOrderDetailViewModel | null;
   onHome: () => void;
 }) {
+  if (!model) {
+    return (
+      <div className="screen-stack">
+        <p className="screen-eyebrow">Активная заявка не выбрана.</p>
+        <button className="secondary-button" type="button" onClick={onHome}>
+          На главный
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="screen-stack">
       <div className="detail-status-row">
         <span>Статус</span>
-        <span className="status-badge">{screen.eyebrow?.replace('Статус: ', '')}</span>
+        <span className={`status-badge tone-${model.statusTone}`}>
+          {model.statusLabel}
+        </span>
       </div>
 
-      <DataPanel row={screen.rows[0]!} />
+      <DataPanel row={{
+        label: model.directionLabel,
+        value: model.primaryAmountLabel,
+        tone: 'mono',
+      }} />
 
-      <div className="qr-panel">
-        <span>Отправьте USDT на адрес ниже</span>
-        <div className="fake-qr" aria-label="QR код адреса для перевода">
-          {Array.from({ length: 64 }, (_, index) => (
-            <span key={index} className={index % 3 === 0 || index % 7 === 0 ? 'qr-dot on' : 'qr-dot'} />
-          ))}
+      {model.qrValue ? (
+        <div className="qr-panel">
+          <span>Отправьте USDT на адрес ниже</span>
+          <div className="fake-qr" aria-label="QR код адреса для перевода">
+            {Array.from({ length: 64 }, (_, index) => (
+              <span key={index} className={index % 3 === 0 || index % 7 === 0 ? 'qr-dot on' : 'qr-dot'} />
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="qr-panel text-panel">
+          <Info size={22} />
+          <span>USDT будет отправлен на кошелек клиента после оплаты в офисе.</span>
+        </div>
+      )}
 
-      {screen.rows.slice(1).map((row) => (
-        <DataPanel key={row.label} row={row} withCopy={row.tone === 'mono'} />
+      {model.rows.map((row) => (
+        <DataPanel key={row.label} row={row} />
       ))}
 
       <button className="secondary-button" type="button" onClick={onHome}>
-        {screen.cta}
+        На главный
       </button>
     </div>
   );
 }
 
-function ProfileScreen({ screen }: { screen: MiniAppScreen }) {
+function ProfileScreen({
+  screen,
+  model,
+}: {
+  screen: MiniAppScreen;
+  model: MiniAppProfileViewModel;
+}) {
   return (
     <div className="screen-stack">
       <div className="profile-card">
@@ -249,12 +409,33 @@ function ProfileScreen({ screen }: { screen: MiniAppScreen }) {
             <CheckCircle size={16} />
             {screen.eyebrow}
           </span>
-          <strong>Обменов: 24</strong>
+          <strong>Обменов: {model.totalOrdersLabel}</strong>
         </div>
       </div>
 
       <div className="field-stack">
-        {screen.rows.slice(1, 3).map((row) => (
+        {[
+          {
+            label: 'Реферальный баланс',
+            value: '0 USDT',
+            tone: 'accent' as MiniAppTone,
+          },
+          {
+            label: 'Telegram ID',
+            value: model.telegramIdLabel,
+            tone: 'mono' as MiniAppTone,
+          },
+          {
+            label: 'Активные заявки',
+            value: model.activeOrdersLabel,
+            tone: 'mono' as MiniAppTone,
+          },
+          {
+            label: 'Username',
+            value: model.usernameLabel,
+            tone: 'mono' as MiniAppTone,
+          },
+        ].map((row) => (
           <DataPanel key={row.label} row={row} withCopy />
         ))}
       </div>
@@ -321,12 +502,18 @@ function RateCell({ row }: { row?: MiniAppRow }) {
   );
 }
 
-function DataPanel({ row, withCopy = false }: { row: MiniAppRow; withCopy?: boolean }) {
+type DisplayRow = (MiniAppRow | MiniAppDetailRowViewModel) & {
+  copyable?: boolean;
+};
+
+function DataPanel({ row, withCopy }: { row: DisplayRow; withCopy?: boolean }) {
+  const shouldCopy = withCopy ?? row.copyable ?? false;
+
   return (
     <div className="data-panel">
       <span>{row.label}</span>
       <strong className={`tone-${row.tone ?? 'default'}`}>{row.value}</strong>
-      {withCopy && (
+      {shouldCopy && (
         <button className="copy-button" type="button" aria-label={`Скопировать ${row.label}`}>
           <Copy size={18} />
         </button>
