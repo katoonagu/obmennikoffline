@@ -256,7 +256,42 @@ describe('loadServerConfig', () => {
         buyRate: '76.850000',
         sellRate: '76.250000',
       },
+      miniAppCorsOrigins: undefined,
     });
+  });
+
+  it('normalizes explicit Mini App CORS origins before boot', () => {
+    expect(
+      loadServerConfig({
+        NODE_ENV: 'development',
+        DATABASE_URL: 'postgresql://user:password@localhost:5432/obmennikoffline',
+        USDT_RUB_BUY_RATE: '76.850000',
+        USDT_RUB_SELL_RATE: '76.250000',
+        MINIAPP_CORS_ORIGINS: ' http://127.0.0.1:5173/,https://mini.example ',
+      }).miniAppCorsOrigins,
+    ).toEqual(['http://127.0.0.1:5173', 'https://mini.example']);
+  });
+
+  it('rejects unsafe Mini App CORS origins before boot', () => {
+    expect(() =>
+      loadServerConfig({
+        NODE_ENV: 'development',
+        DATABASE_URL: 'postgresql://user:password@localhost:5432/obmennikoffline',
+        USDT_RUB_BUY_RATE: '76.850000',
+        USDT_RUB_SELL_RATE: '76.250000',
+        MINIAPP_CORS_ORIGINS: '*',
+      }),
+    ).toThrow('MINIAPP_CORS_ORIGINS contains an invalid origin');
+
+    expect(() =>
+      loadServerConfig({
+        NODE_ENV: 'development',
+        DATABASE_URL: 'postgresql://user:password@localhost:5432/obmennikoffline',
+        USDT_RUB_BUY_RATE: '76.850000',
+        USDT_RUB_SELL_RATE: '76.250000',
+        MINIAPP_CORS_ORIGINS: 'http://127.0.0.1:5173,http://127.0.0.1:5173/',
+      }),
+    ).toThrow('MINIAPP_CORS_ORIGINS must not contain duplicate origins');
   });
 
   it('normalizes production env values and enables admin routes', () => {
@@ -279,6 +314,7 @@ describe('loadServerConfig', () => {
       telegramBotToken: STRONG_TELEGRAM_BOT_TOKEN,
       telegramInitDataMaxAgeSeconds: 120,
       adminActorIds: ['manager-1', 'manager-2'],
+      miniAppCorsOrigins: undefined,
       rates: {
         buyRate: '76.850000',
         sellRate: '76.250000',

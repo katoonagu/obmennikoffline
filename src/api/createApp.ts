@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
 import { ZodError, type ZodType } from 'zod';
 import {
   authenticateAdminInDb,
@@ -91,6 +91,7 @@ export interface CreateApiAppOptions<TOrder> {
   adminSessionSecret?: string;
   telegramBotToken?: string;
   telegramInitDataMaxAgeSeconds?: number;
+  corsAllowedOrigins?: readonly string[];
   rateProvider?: UsdtRubRateProvider;
   now?: () => Date;
   publicIdFactory?: () => string;
@@ -203,7 +204,25 @@ export function createApiApp<TOrder>(
   const now = options.now ?? (() => new Date());
   const publicIdFactory = options.publicIdFactory ?? createPublicId;
   const adminActorIds = createAdminActorIdAllowlist(options.adminActorIds);
+  const corsAllowedOrigins = new Set(options.corsAllowedOrigins ?? []);
   const adminLoginFailures = new Map<string, AdminLoginFailureState>();
+
+  if (corsAllowedOrigins.size > 0) {
+    app.addHook('onRequest', (request, reply, done) => {
+      const origin = request.headers.origin;
+
+      if (typeof origin === 'string' && corsAllowedOrigins.has(origin)) {
+        setMiniAppCorsHeaders(reply, origin);
+      }
+
+      if (request.method === 'OPTIONS') {
+        reply.code(204).send();
+        return;
+      }
+
+      done();
+    });
+  }
 
   app.get('/health', async (request, reply) => {
     parseBody(emptyQuerySchema, request.query);
@@ -630,6 +649,16 @@ export function createApiApp<TOrder>(
   });
 
   return app;
+}
+
+function setMiniAppCorsHeaders(reply: FastifyReply, origin: string): void {
+  reply.header('access-control-allow-origin', origin);
+  reply.header('vary', 'Origin');
+  reply.header('access-control-allow-methods', 'GET,POST,OPTIONS');
+  reply.header(
+    'access-control-allow-headers',
+    'authorization,content-type,x-admin-actor-id',
+  );
 }
 
 function parseBody<T>(schema: ZodType<T>, body: unknown): T {

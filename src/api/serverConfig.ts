@@ -10,6 +10,7 @@ export interface ServerConfig {
   enableAdminRoutes: boolean;
   telegramBotToken: string | undefined;
   telegramInitDataMaxAgeSeconds: number | undefined;
+  miniAppCorsOrigins: string[] | undefined;
   rates: UsdtRubRates;
   port: number;
   host: string;
@@ -31,6 +32,7 @@ export function loadServerConfig(env: Env): ServerConfig {
     env,
     'TELEGRAM_INIT_DATA_MAX_AGE_SECONDS',
   );
+  const miniAppCorsOrigins = readOptionalCorsOriginsEnv(env, 'MINIAPP_CORS_ORIGINS');
 
   if (readOptionalEnv(env, 'NODE_ENV') === 'production') {
     if (!telegramBotToken) {
@@ -95,6 +97,7 @@ export function loadServerConfig(env: Env): ServerConfig {
     enableAdminRoutes: Boolean(adminApiToken),
     telegramBotToken,
     telegramInitDataMaxAgeSeconds,
+    miniAppCorsOrigins,
     rates,
     port: readOptionalPositiveIntegerEnv(env, 'PORT') ?? 3000,
     host: readOptionalEnv(env, 'HOST') ?? '0.0.0.0',
@@ -153,6 +156,39 @@ function readOptionalCsvEnv(env: Env, name: string): string[] | undefined {
   }
 
   return values.length > 0 ? values : undefined;
+}
+
+function readOptionalCorsOriginsEnv(env: Env, name: string): string[] | undefined {
+  const values = readOptionalCsvEnv(env, name);
+  if (!values) {
+    return undefined;
+  }
+
+  const origins = values.map((value) => normalizeCorsOrigin(name, value));
+  if (new Set(origins).size !== origins.length) {
+    throw new Error(`${name} must not contain duplicate origins`);
+  }
+
+  return origins;
+}
+
+function normalizeCorsOrigin(name: string, value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name} contains an invalid origin`);
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`${name} contains an invalid origin`);
+  }
+
+  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error(`${name} contains an invalid origin`);
+  }
+
+  return url.origin;
 }
 
 function countUniqueCharacters(value: string): number {

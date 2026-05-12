@@ -275,6 +275,67 @@ describe('createApiApp', () => {
     await app.close();
   });
 
+  it('allows configured Mini App browser origins without wildcard CORS', async () => {
+    const app = createApiApp({
+      db: createDb(),
+      corsAllowedOrigins: ['http://127.0.0.1:5173'],
+      now: () => NOW,
+      publicIdFactory: () => 'E100001',
+    });
+
+    const allowedResponse = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: {
+        origin: 'http://127.0.0.1:5173',
+      },
+    });
+    const blockedResponse = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: {
+        origin: 'https://evil.example',
+      },
+    });
+
+    expect(allowedResponse.statusCode).toBe(200);
+    expect(allowedResponse.headers['access-control-allow-origin']).toBe(
+      'http://127.0.0.1:5173',
+    );
+    expect(allowedResponse.headers.vary).toBe('Origin');
+    expect(blockedResponse.headers['access-control-allow-origin']).toBeUndefined();
+    await app.close();
+  });
+
+  it('answers Mini App CORS preflight for configured local origins', async () => {
+    const app = createApiApp({
+      db: createDb(),
+      corsAllowedOrigins: ['http://127.0.0.1:5173'],
+      now: () => NOW,
+      publicIdFactory: () => 'E100001',
+    });
+
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/orders/buy',
+      headers: {
+        origin: 'http://127.0.0.1:5173',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization,content-type',
+      },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe(
+      'http://127.0.0.1:5173',
+    );
+    expect(response.headers['access-control-allow-methods']).toBe('GET,POST,OPTIONS');
+    expect(response.headers['access-control-allow-headers']).toBe(
+      'authorization,content-type,x-admin-actor-id',
+    );
+    await app.close();
+  });
+
   it('returns current public USDT/RUB rates', async () => {
     const rateProvider = createStaticRateProvider({
       buyRate: '76.85',

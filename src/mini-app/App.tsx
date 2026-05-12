@@ -24,10 +24,13 @@ import {
   type MiniAppTone,
 } from './miniAppContent.js';
 import {
-  createMockMiniAppApi,
   miniAppMockFixtures,
   type MiniAppApi,
 } from './miniAppApi.js';
+import {
+  createMiniAppApiFromRuntimeConfig,
+  loadBrowserMiniAppRuntimeConfig,
+} from './miniAppRuntimeConfig.js';
 import type { OrderDto, UserProfileDto } from '../orders/orderReadService.js';
 import type { UsdtRubRates } from '../rates/rateQuoteService.js';
 import {
@@ -39,6 +42,14 @@ import {
   type MiniAppOrderDetailViewModel,
   type MiniAppProfileViewModel,
 } from './miniAppViewModel.js';
+import {
+  buildBuyOrderInput,
+  buildSellOrderInput,
+  createInitialBuyOrderForm,
+  createInitialSellOrderForm,
+  type BuyOrderFormState,
+  type SellOrderFormState,
+} from './miniAppOrderForms.js';
 
 const screenById = new Map<MiniAppScreenId, MiniAppScreen>(
   miniAppScreens.map((screen) => [screen.id, screen]),
@@ -49,14 +60,6 @@ const navItems: Array<{ id: MiniAppScreenId; label: string; icon: LucideIcon }> 
   { id: 'order-detail', label: 'История', icon: Timer },
   { id: 'profile', label: 'Профиль', icon: User },
 ];
-
-const sampleCustomer = {
-  lastName: 'Ivanov',
-  firstName: 'Ivan',
-  middleName: 'Ivanovich',
-};
-
-const samplePayoutAddress = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
 
 function getScreen(id: MiniAppScreenId): MiniAppScreen {
   const screen = screenById.get(id);
@@ -70,7 +73,9 @@ function getScreen(id: MiniAppScreenId): MiniAppScreen {
 
 export function App() {
   const [activeScreenId, setActiveScreenId] = useState<MiniAppScreenId>('home');
-  const [api] = useState<MiniAppApi>(() => createMockMiniAppApi());
+  const [api] = useState<MiniAppApi>(() =>
+    createMiniAppApiFromRuntimeConfig(loadBrowserMiniAppRuntimeConfig()),
+  );
   const [rates, setRates] = useState<UsdtRubRates>(miniAppMockFixtures.rates);
   const [activeOrders, setActiveOrders] = useState<OrderDto[]>([
     miniAppMockFixtures.sellOrder,
@@ -80,6 +85,14 @@ export function App() {
   );
   const [profile, setProfile] = useState<UserProfileDto>(miniAppMockFixtures.profile);
   const [loadingLabel, setLoadingLabel] = useState('Загрузка данных');
+  const [buyForm, setBuyForm] = useState<BuyOrderFormState>(() =>
+    createInitialBuyOrderForm(),
+  );
+  const [sellForm, setSellForm] = useState<SellOrderFormState>(() =>
+    createInitialSellOrderForm(),
+  );
+  const [submissionError, setSubmissionError] = useState<string | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const activeScreen = useMemo(() => getScreen(activeScreenId), [activeScreenId]);
   const homeModel = useMemo<MiniAppHomeViewModel>(
     () => createMiniAppHomeViewModel({ rates, activeOrders }),
@@ -128,22 +141,43 @@ export function App() {
   }
 
   async function handleCreateBuyOrder() {
-    const order = await api.createBuyOrder({
-      customer: sampleCustomer,
-      amountRub: '200000.00',
-      clientPayoutAddress: samplePayoutAddress,
+    const result = buildBuyOrderInput(buyForm);
+    if (!result.ok) {
+      setSubmissionError(result.message);
+      return;
+    }
+
+    await submitOrder(async () => {
+      const order = await api.createBuyOrder(result.input);
+      await refreshActiveOrders(order);
+      setActiveScreenId('order-detail');
     });
-    await refreshActiveOrders(order);
-    setActiveScreenId('order-detail');
   }
 
   async function handleCreateSellOrder() {
-    const order = await api.createSellOrder({
-      customer: sampleCustomer,
-      amountUsdt: '5000.000000',
+    const result = buildSellOrderInput(sellForm);
+    if (!result.ok) {
+      setSubmissionError(result.message);
+      return;
+    }
+
+    await submitOrder(async () => {
+      const order = await api.createSellOrder(result.input);
+      await refreshActiveOrders(order);
+      setActiveScreenId('order-detail');
     });
-    await refreshActiveOrders(order);
-    setActiveScreenId('order-detail');
+  }
+
+  async function submitOrder(createOrder: () => Promise<void>) {
+    setSubmissionError(undefined);
+    setIsSubmitting(true);
+    try {
+      await createOrder();
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : 'Не удалось создать заявку');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -177,6 +211,10 @@ export function App() {
             <FlowScreen
               screen={activeScreen}
               variant="buy"
+              buyForm={buyForm}
+              onBuyFormChange={setBuyForm}
+              errorMessage={submissionError}
+              isSubmitting={isSubmitting}
               onCreate={handleCreateBuyOrder}
             />
           )}
@@ -184,6 +222,10 @@ export function App() {
             <FlowScreen
               screen={activeScreen}
               variant="sell"
+              sellForm={sellForm}
+              onSellFormChange={setSellForm}
+              errorMessage={submissionError}
+              isSubmitting={isSubmitting}
               onCreate={handleCreateSellOrder}
             />
           )}
@@ -293,21 +335,93 @@ function HomeScreen({
 function FlowScreen({
   screen,
   variant,
+  buyForm,
+  sellForm,
+  onBuyFormChange,
+  onSellFormChange,
+  errorMessage,
+  isSubmitting,
   onCreate,
 }: {
   screen: MiniAppScreen;
   variant: 'buy' | 'sell';
-  onCreate?: () => void;
+  buyForm?: BuyOrderFormState;
+  sellForm?: SellOrderFormState;
+  onBuyFormChange?: (form: BuyOrderFormState) => void;
+  onSellFormChange?: (form: SellOrderFormState) => void;
+  errorMessage?: string;
+  isSubmitting: boolean;
+  onCreate: () => Promise<void>;
 }) {
   return (
-    <div className="screen-stack">
+    <form
+      className="screen-stack order-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void onCreate();
+      }}
+    >
       <p className="screen-eyebrow">{screen.eyebrow}</p>
 
-      <div className="field-stack">
-        {screen.rows.map((row) => (
-          <DataPanel key={row.label} row={row} />
-        ))}
-      </div>
+      {variant === 'buy' && buyForm && onBuyFormChange && (
+        <>
+          <FormField
+            label="Сумма в рублях"
+            value={buyForm.amountRub}
+            inputMode="decimal"
+            helper="Сколько рублей вы принесете в офис."
+            onChange={(amountRub) => onBuyFormChange({ ...buyForm, amountRub })}
+          />
+          <FormField
+            label="Кошелек для получения (TRC-20)"
+            value={buyForm.clientPayoutAddress}
+            inputMode="text"
+            helper="USDT будет отправлен на этот адрес после оплаты."
+            onChange={(clientPayoutAddress) =>
+              onBuyFormChange({ ...buyForm, clientPayoutAddress })
+            }
+          />
+          <FormField
+            label="ФИО"
+            value={buyForm.fullName}
+            inputMode="text"
+            helper="Фамилия, имя и отчество для пропуска."
+            onChange={(fullName) => onBuyFormChange({ ...buyForm, fullName })}
+          />
+        </>
+      )}
+
+      {variant === 'sell' && sellForm && onSellFormChange && (
+        <>
+          <FormField
+            label="Сумма в USDT"
+            value={sellForm.amountUsdt}
+            inputMode="decimal"
+            helper="Сумма продажи в сети Tron TRC-20."
+            onChange={(amountUsdt) => onSellFormChange({ ...sellForm, amountUsdt })}
+          />
+          <FormField
+            label="ФИО"
+            value={sellForm.fullName}
+            inputMode="text"
+            helper="Фамилия, имя и отчество для пропуска."
+            onChange={(fullName) => onSellFormChange({ ...sellForm, fullName })}
+          />
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={sellForm.acceptedTerms}
+              onChange={(event) =>
+                onSellFormChange({
+                  ...sellForm,
+                  acceptedTerms: event.currentTarget.checked,
+                })
+              }
+            />
+            <span>Принимаю правила и условия обмена</span>
+          </label>
+        </>
+      )}
 
       <div className="warning-stack">
         {screen.highlights.map((highlight, index) => (
@@ -324,10 +438,40 @@ function FlowScreen({
         ))}
       </div>
 
-      <button className="primary-button" type="button" onClick={onCreate}>
-        {screen.cta}
+      {errorMessage && <p className="form-error">{errorMessage}</p>}
+
+      <button className="primary-button" type="submit" disabled={isSubmitting}>
+        {isSubmitting ? 'Создаем заявку' : screen.cta}
       </button>
-    </div>
+    </form>
+  );
+}
+
+function FormField({
+  label,
+  value,
+  inputMode,
+  helper,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  inputMode: 'decimal' | 'text';
+  helper: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="form-field">
+      <span>{label}</span>
+      <input
+        className="form-input"
+        value={value}
+        inputMode={inputMode}
+        autoComplete="off"
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+      <small>{helper}</small>
+    </label>
   );
 }
 

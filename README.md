@@ -97,6 +97,39 @@ Development API:
 pnpm dev:api
 ```
 
+Development Mini App:
+
+```powershell
+pnpm dev:miniapp
+```
+
+The Mini App defaults to mock fixture mode for design and offline UI work:
+
+```env
+VITE_MINIAPP_API_MODE="mock"
+```
+
+To point it at the local Fastify API, start `pnpm dev:api`, then restart the
+Vite dev server with public browser config:
+
+```env
+MINIAPP_CORS_ORIGINS="http://127.0.0.1:5173"
+VITE_MINIAPP_API_MODE="api"
+VITE_MINIAPP_API_BASE_URL="http://127.0.0.1:3000"
+VITE_MINIAPP_DEV_USER_ID="dev-user-1"
+```
+
+`MINIAPP_CORS_ORIGINS` is read by the Fastify API process and must contain exact
+browser origins only, for example `http://127.0.0.1:5173` for local Vite.
+
+`VITE_` values are public browser config, not secrets. Do not put bot tokens,
+admin tokens, TRON API keys, seed phrases, or private keys in Vite env vars.
+When Telegram WebApp `initData` is present, the Mini App sends
+`Authorization: tma <initData>`. `VITE_MINIAPP_DEV_USER_ID` is only a local
+fallback for API runs without `TELEGRAM_BOT_TOKEN`; if the API has
+`TELEGRAM_BOT_TOKEN` configured, order/profile routes require signed Telegram
+initData.
+
 Build:
 
 ```powershell

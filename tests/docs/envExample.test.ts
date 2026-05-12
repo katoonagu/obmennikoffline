@@ -39,4 +39,18 @@ describe('.env.example contract', () => {
     expect(envExample).not.toContain('PRIVATE_KEY=');
     expect(envExample).not.toContain('SEED_PHRASE=');
   });
+
+  it('documents public Mini App Vite environment without secrets', () => {
+    expect(envExample).toContain('VITE_MINIAPP_API_MODE');
+    expect(envExample).toContain('mock');
+    expect(envExample).toContain('api');
+    expect(envExample).toContain('VITE_MINIAPP_API_BASE_URL');
+    expect(envExample).toContain('http://127.0.0.1:3000');
+    expect(envExample).toContain('VITE_MINIAPP_DEV_USER_ID');
+    expect(envExample).toContain('MINIAPP_CORS_ORIGINS');
+    expect(envExample).toContain('http://127.0.0.1:5173');
+    expect(envExample).toContain('Telegram WebApp initData');
+    expect(envExample).toContain('These VITE_ values are public');
+    expect(envExample).toContain('browser config, not secrets');
+  });
 });

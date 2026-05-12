@@ -12,6 +12,7 @@ export default defineConfig({
   build: {
     outDir: 'dist/mini-app',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       input: fileURLToPath(new URL('./index.html', import.meta.url)),
     },
