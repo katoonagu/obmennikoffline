@@ -20,7 +20,10 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       chunkSizeWarningLimit: 700,
       rollupOptions: {
-        input: fileURLToPath(new URL('./index.html', import.meta.url)),
+        input: {
+          miniApp: fileURLToPath(new URL('./index.html', import.meta.url)),
+          admin: fileURLToPath(new URL('./admin.html', import.meta.url)),
+        },
       },
     },
   };

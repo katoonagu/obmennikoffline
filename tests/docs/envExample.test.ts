@@ -51,6 +51,7 @@ describe('.env.example contract', () => {
     expect(envExample).toContain('VITE_MINIAPP_API_BASE_URL');
     expect(envExample).toContain('http://127.0.0.1:3000');
     expect(envExample).toContain('VITE_MINIAPP_DEV_USER_ID');
+    expect(envExample).toContain('VITE_ADMIN_API_BASE_URL');
     expect(envExample).toContain('MINIAPP_CORS_ORIGINS');
     expect(envExample).toContain('http://127.0.0.1:5173');
     expect(envExample).toContain('MINIAPP_DEV_AUTH_ENABLED');

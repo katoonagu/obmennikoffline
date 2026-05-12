@@ -34,6 +34,7 @@ describe('API route contracts', () => {
       ['POST', '/api/admin/session', 'admin-password-login'],
       ['POST', '/api/address-pool/import', 'admin-session-or-bearer-and-actor-header'],
       ['GET', '/api/admin/orders/active', 'admin-session-or-bearer-and-actor-header'],
+      ['GET', '/api/admin/orders/:publicId', 'admin-session-or-bearer-and-actor-header'],
       ['POST', '/api/admin/orders/:publicId/status', 'admin-session-or-bearer-and-actor-header'],
       [
         'POST',
@@ -536,6 +537,7 @@ describe('API route contracts', () => {
 
   it('rejects unexpected route params instead of stripping them', () => {
     const publicOrderContract = findRoute(publicRouteContracts, '/api/orders/:publicId');
+    const adminOrderContract = findRoute(adminRouteContracts, '/api/admin/orders/:publicId');
     const statusContract = findRoute(
       adminRouteContracts,
       '/api/admin/orders/:publicId/status',
@@ -545,7 +547,7 @@ describe('API route contracts', () => {
       '/api/admin/orders/:publicId/manual-crypto-payout',
     );
 
-    for (const contract of [publicOrderContract, statusContract, payoutContract]) {
+    for (const contract of [publicOrderContract, adminOrderContract, statusContract, payoutContract]) {
       const trimmedResult = contract.paramsSchema?.safeParse({
         publicId: '  E74737  ',
       });

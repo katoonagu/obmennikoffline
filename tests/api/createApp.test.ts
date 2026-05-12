@@ -1259,6 +1259,47 @@ describe('createApiApp', () => {
     await app.close();
   });
 
+  it('reads one order detail for managers through an admin route', async () => {
+    const db = createDb({
+      readOrder: createReadableOrder({
+        publicId: 'E74737',
+      }),
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/orders/E74737',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+        'x-admin-actor-id': 'manager-1',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      order: {
+        publicId: 'E74737',
+        direction: 'SELL_USDT',
+        depositAddress: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
+      },
+    });
+    expect(db.order.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          publicId: 'E74737',
+        },
+      }),
+    );
+    await app.close();
+  });
+
   it('requires an admin actor header on manager-wide active order lists', async () => {
     const db = createDb({
       readOrders: [createReadableOrder()],

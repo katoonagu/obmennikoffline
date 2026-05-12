@@ -340,6 +340,35 @@ export function createApiApp<TOrder>(
       return reply.send(validateApiResponse(ordersResponseSchema, { orders }));
     });
 
+    app.get('/api/admin/orders/:publicId', async (request, reply) => {
+      const adminAuthorization = await resolveAdminAuthorization({
+        db: options.db,
+        authorization: request.headers.authorization,
+        apiToken: options.adminApiToken!,
+        sessionSecret: options.adminSessionSecret,
+        now: now(),
+      });
+      resolveAdminActorId(
+        adminAuthorization,
+        request.headers['x-admin-actor-id'],
+        adminActorIds,
+      );
+      const params = parseBody(orderParamsSchema, request.params);
+      parseBody(emptyQuerySchema, request.query);
+      const order = await getAnyOrderByPublicId(options.db, {
+        publicId: params.publicId,
+      });
+
+      if (!order) {
+        return reply.code(404).send({
+          error: 'not_found',
+          message: 'order not found',
+        });
+      }
+
+      return reply.send(validateApiResponse(orderResponseSchema, { order }));
+    });
+
     app.post('/api/admin/orders/:publicId/status', async (request, reply) => {
       const requestNow = now();
       const adminAuthorization = await resolveAdminAuthorization({

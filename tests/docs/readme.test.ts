@@ -46,6 +46,8 @@ describe('README runbook', () => {
     expect(readme).toContain('pnpm wallet:generate-address-pool');
     expect(readme).toContain('$env:MINIAPP_DEV_AUTH_ENABLED="true"; $env:MINIAPP_CORS_ORIGINS="http://127.0.0.1:5173"; $env:HOST="127.0.0.1"; $env:PORT="3000"; pnpm dev:api');
     expect(readme).toContain('$env:VITE_APP_ENV="local"; $env:VITE_MINIAPP_API_MODE="api"; $env:VITE_MINIAPP_API_BASE_URL="http://127.0.0.1:3000"; $env:VITE_MINIAPP_DEV_USER_ID="dev-user-1"; pnpm dev:miniapp');
+    expect(readme).toContain('http://127.0.0.1:5173/frontend/admin.html');
+    expect(readme).toContain('VITE_ADMIN_API_BASE_URL');
     expect(readme).toContain('TRON_FULL_HOST');
     expect(readme).toContain('TRON_WATCHER_ADDRESS_BATCH_SIZE');
     expect(readme).toContain('ORDER_EXPIRATION_LIMIT');

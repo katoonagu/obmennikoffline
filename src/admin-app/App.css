@@ -1,0 +1,430 @@
+:root {
+  color-scheme: dark;
+  font-family: Manrope, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #090d0e;
+  color: #f4f7f5;
+  --admin-bg: #090d0e;
+  --admin-panel: #121719;
+  --admin-panel-2: #171d20;
+  --admin-border: rgba(220, 255, 238, 0.13);
+  --admin-border-strong: rgba(104, 255, 189, 0.34);
+  --admin-text: #f4f7f5;
+  --admin-muted: #8fa29d;
+  --admin-accent: #38d68c;
+  --admin-cyan: #16c7dd;
+  --admin-warning: #f3a81e;
+  --admin-danger: #ff6b57;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(22, 199, 221, 0.11), transparent 34rem),
+    linear-gradient(135deg, #07100f 0%, #090d0e 42%, #0d1012 100%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.admin-shell {
+  width: min(1440px, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 28px;
+}
+
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-topbar h1,
+.admin-login-panel h1 {
+  margin: 4px 0 0;
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1;
+}
+
+.admin-brand-mark {
+  color: var(--admin-accent);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.admin-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-session-pill,
+.admin-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 999px;
+  color: var(--admin-accent);
+  background: rgba(56, 214, 140, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-icon-button,
+.admin-ghost-button,
+.admin-primary-button,
+.admin-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.admin-icon-button:active,
+.admin-ghost-button:active,
+.admin-primary-button:active,
+.admin-secondary-button:active,
+.admin-order-row:active {
+  transform: translateY(1px);
+}
+
+.admin-icon-button {
+  width: 40px;
+  color: var(--admin-text);
+  border-color: var(--admin-border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-ghost-button,
+.admin-secondary-button {
+  padding: 0 14px;
+  color: var(--admin-text);
+  border-color: var(--admin-border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-primary-button {
+  width: 100%;
+  padding: 0 18px;
+  color: #06100c;
+  background: linear-gradient(135deg, #4be095, #16c7dd);
+  font-weight: 800;
+}
+
+.admin-secondary-button {
+  width: 100%;
+  font-weight: 700;
+}
+
+.admin-dashboard {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.9fr) minmax(460px, 1.3fr);
+  grid-template-rows: auto auto;
+  gap: 18px;
+  padding-top: 20px;
+}
+
+.admin-login-panel,
+.admin-order-queue,
+.admin-detail-panel,
+.admin-address-import,
+.admin-error,
+.admin-success,
+.admin-loading {
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: rgba(18, 23, 25, 0.9);
+}
+
+.admin-login-panel {
+  display: grid;
+  gap: 26px;
+  width: min(520px, 100%);
+  margin: 8vh auto;
+  padding: 28px;
+}
+
+.admin-brand-block p,
+.admin-address-import p,
+.admin-payout-form p,
+.admin-empty-state p {
+  margin: 8px 0 0;
+  color: var(--admin-muted);
+  line-height: 1.5;
+}
+
+.admin-order-queue,
+.admin-detail-panel,
+.admin-address-import {
+  padding: 18px;
+}
+
+.admin-detail-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-address-import {
+  grid-column: 1 / -1;
+}
+
+.admin-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.admin-section-title h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.admin-order-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-order-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(150px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  color: var(--admin-text);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.admin-order-row.selected {
+  border-color: var(--admin-border-strong);
+  background: rgba(56, 214, 140, 0.08);
+}
+
+.admin-order-row strong,
+.admin-detail-line strong {
+  display: block;
+}
+
+.admin-detail-line strong {
+  overflow-wrap: anywhere;
+}
+
+.admin-order-identity strong {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.admin-order-amount {
+  min-width: 0;
+}
+
+.admin-order-row small,
+.admin-detail-line span {
+  display: block;
+  margin-top: 4px;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.admin-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-detail-line {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-detail-line.emphasis {
+  border-color: rgba(56, 214, 140, 0.42);
+  background: rgba(56, 214, 140, 0.08);
+}
+
+.mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.admin-status-form,
+.admin-payout-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--admin-border);
+}
+
+.admin-field {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-field span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  color: var(--admin-text);
+  background: #0d1214;
+  outline: none;
+}
+
+.admin-field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.admin-field input:focus,
+.admin-field select:focus,
+.admin-field textarea:focus {
+  border-color: var(--admin-border-strong);
+}
+
+.admin-status {
+  justify-self: end;
+  color: var(--admin-warning);
+  border-color: rgba(243, 168, 30, 0.45);
+  background: rgba(243, 168, 30, 0.08);
+}
+
+.status-completed {
+  color: var(--admin-accent);
+  border-color: var(--admin-border-strong);
+}
+
+.status-cancelled,
+.status-expired,
+.status-rejected {
+  color: var(--admin-danger);
+  border-color: rgba(255, 107, 87, 0.4);
+}
+
+.admin-error,
+.admin-success,
+.admin-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+}
+
+.admin-error {
+  color: #ffd8d1;
+  border-color: rgba(255, 107, 87, 0.4);
+  background: rgba(255, 107, 87, 0.08);
+}
+
+.admin-success {
+  color: #bcffd8;
+  border-color: rgba(56, 214, 140, 0.4);
+  background: rgba(56, 214, 140, 0.08);
+}
+
+.admin-loading {
+  color: var(--admin-muted);
+}
+
+.admin-runtime-error {
+  width: min(640px, 100%);
+  margin: 12vh auto;
+  align-items: flex-start;
+}
+
+.admin-runtime-error h1 {
+  margin: 0 0 8px;
+}
+
+.admin-empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  padding: 20px;
+  border: 1px dashed var(--admin-border);
+  border-radius: 10px;
+  color: var(--admin-muted);
+  text-align: center;
+}
+
+.admin-empty-state.compact {
+  min-height: 110px;
+}
+
+.admin-import-meta {
+  margin: 10px 0 12px;
+  color: var(--admin-accent);
+  font-weight: 800;
+}
+
+@media (max-width: 960px) {
+  .admin-shell {
+    padding: 18px;
+  }
+
+  .admin-topbar,
+  .admin-topbar-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-dashboard,
+  .admin-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-order-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-status {
+    justify-self: start;
+  }
+}

@@ -251,6 +251,14 @@ export const adminRouteContracts = [
     responseSchema: ordersResponseSchema,
   },
   {
+    method: 'GET',
+    path: '/api/admin/orders/:publicId',
+    auth: 'admin-session-or-bearer-and-actor-header',
+    paramsSchema: orderParamsSchema,
+    querySchema: emptyQuerySchema,
+    responseSchema: orderResponseSchema,
+  },
+  {
     method: 'POST',
     path: '/api/admin/orders/:publicId/status',
     auth: 'admin-session-or-bearer-and-actor-header',

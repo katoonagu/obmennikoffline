@@ -121,6 +121,7 @@ Admin API:
 | `POST` | `/api/admin/session` | Create an admin session |
 | `POST` | `/api/address-pool/import` | Import public TRON addresses |
 | `GET` | `/api/admin/orders/active` | Read active order queue |
+| `GET` | `/api/admin/orders/:publicId` | Read one manager order detail |
 | `POST` | `/api/admin/orders/:publicId/status` | Change order status |
 | `POST` | `/api/admin/orders/:publicId/manual-crypto-payout` | Record manual crypto payout tx id |
 
@@ -144,6 +145,23 @@ The Mini App gives the client a focused flow:
 
 The Mini App supports two runtime modes: `mock` for UI/design work without a
 backend and `api` for local Fastify integration.
+
+## Admin App Flow
+
+The admin frontend is a separate Vite entrypoint at
+`http://127.0.0.1:5173/frontend/admin.html`. It uses admin session login and
+the existing admin API:
+
+- login through `POST /api/admin/session`;
+- active order queue through `GET /api/admin/orders/active`;
+- order detail through `GET /api/admin/orders/:publicId`;
+- status changes with optional audit comment;
+- manual BUY payout tx hash recording;
+- public TRON address CSV import.
+
+Set `VITE_ADMIN_API_BASE_URL` to the Fastify API base URL. This value is public
+browser config, not a secret; never put `ADMIN_API_TOKEN`, admin passwords, seed
+phrases, private keys, or TRON provider keys into Vite env.
 
 ## Address Pool And Watcher
 
@@ -349,6 +367,7 @@ VITE_APP_ENV="local"
 VITE_MINIAPP_API_MODE="api"
 VITE_MINIAPP_API_BASE_URL="http://127.0.0.1:3000"
 VITE_MINIAPP_DEV_USER_ID="dev-user-1"
+VITE_ADMIN_API_BASE_URL="http://127.0.0.1:3000"
 ```
 
 `MINIAPP_CORS_ORIGINS` is read by the Fastify API process and must contain exact
