@@ -7,6 +7,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev:api": "tsx src/api/server.ts",
+    "dev:miniapp": "vite --config frontend/vite.config.ts --host 127.0.0.1",
+    "build:miniapp": "vite build --config frontend/vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint:types": "tsc -p tsconfig.json --noEmit",
@@ -24,14 +26,21 @@
     "bs58check": "^4.0.0",
     "ethers": "^6.13.4",
     "fastify": "^5.8.5",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "tronweb": "^6.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
     "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "vite": "^8.0.12",
     "vitest": "^2.1.8"
   }
 }

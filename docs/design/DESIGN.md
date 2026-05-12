@@ -1,7 +1,34 @@
 # Offline Exchange Mini App Design System
 
-Status: draft design direction
+Status: selected design direction
 Scope: user-facing Telegram Mini App, not admin/backoffice
+
+## Selected Direction: Dark Trust Terminal
+
+The first implemented direction is the OBMEN dark mobile terminal shown in the
+generated reference board. It is a compact Telegram WebView product surface for
+cash USDT/RUB exchange: dark operational panels, emerald primary actions, cyan
+sell/accent cues, and amber only for pending/expiry warnings.
+
+Locked palette:
+
+- `#080D0E` app background
+- `#121416` elevated surface
+- `#1A1E20` input and order panel
+- `#33BC65` primary action and buy accent
+- `#12DCEF` sell accent
+- `#DFFFD9` soft trust highlight
+- `#F5A623` warning and pending status
+- `#F2F2F2` foreground text
+
+First frontend slice:
+
+- Home with rates, BUY/SELL actions, and active orders.
+- BUY form/preview where the customer provides a TRC-20 payout address.
+- SELL form/preview where the customer receives a system deposit address only
+  after order creation.
+- Active order detail with QR/address copy surface and TRON TRC-20 network.
+- Profile with Telegram-bound account information and support/legal entries.
 
 ## Positioning
 
