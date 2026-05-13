@@ -6,6 +6,7 @@ import {
   getOrderByPublicId,
   getUserProfile,
   listAllActiveOrders,
+  listAllHistoryOrders,
   listActiveOrders,
   listHistoryOrders,
   type OrderReadDb,
@@ -145,6 +146,36 @@ describe('orderReadService', () => {
         where: {
           status: {
             in: ACTIVE_ORDER_STATUSES,
+          },
+        },
+        take: 10,
+      }),
+    );
+  });
+
+  it('lists all history orders for manager queues without a user filter', async () => {
+    const db = createDb({
+      orders: [
+        createOrderRecord({
+          status: 'completed',
+          completedAt: new Date('2026-05-11T10:30:00.000Z'),
+        }),
+      ],
+    });
+
+    await expect(listAllHistoryOrders(db, { limit: 10 })).resolves.toMatchObject([
+      {
+        publicId: 'E74737',
+        status: 'completed',
+        completedAt: '2026-05-11T10:30:00.000Z',
+      },
+    ]);
+
+    expect(db.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: {
+            in: HISTORY_ORDER_STATUSES,
           },
         },
         take: 10,

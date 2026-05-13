@@ -29,6 +29,7 @@ import {
   getOrderByPublicId,
   getUserProfile,
   listAllActiveOrders,
+  listAllHistoryOrders,
   listActiveOrders,
   listHistoryOrders,
   type OrderReadDb,
@@ -334,6 +335,27 @@ export function createApiApp<TOrder>(
       );
       const query = parseBody(adminOrderListQuerySchema, request.query);
       const orders = await listAllActiveOrders(options.db, {
+        limit: query.limit,
+      });
+
+      return reply.send(validateApiResponse(ordersResponseSchema, { orders }));
+    });
+
+    app.get('/api/admin/orders/history', async (request, reply) => {
+      const adminAuthorization = await resolveAdminAuthorization({
+        db: options.db,
+        authorization: request.headers.authorization,
+        apiToken: options.adminApiToken!,
+        sessionSecret: options.adminSessionSecret,
+        now: now(),
+      });
+      resolveAdminActorId(
+        adminAuthorization,
+        request.headers['x-admin-actor-id'],
+        adminActorIds,
+      );
+      const query = parseBody(adminOrderListQuerySchema, request.query);
+      const orders = await listAllHistoryOrders(options.db, {
         limit: query.limit,
       });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canRecordManualCryptoPayout,
+  filterAdminOrders,
   formatAdminOrderAmount,
   formatAdminOrderDirection,
   formatAdminOrderStatus,
@@ -37,5 +38,43 @@ describe('Admin App view model', () => {
         address: 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY',
       },
     ]);
+  });
+
+  it('filters manager orders by direction, status, public id, customer, and wallet text', () => {
+    const buyOrder = {
+      ...sampleAdminOrder,
+      publicId: 'E97010',
+      direction: 'BUY_USDT',
+      status: 'completed',
+      depositAddress: null,
+      clientPayoutAddress: 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7',
+      customer: {
+        lastName: 'Ivanov',
+        firstName: 'Ivan',
+        middleName: 'Ivanovich',
+      },
+    } as const;
+    const orders = [sampleAdminOrder, buyOrder];
+
+    expect(filterAdminOrders(orders, {
+      search: '97010',
+      direction: 'all',
+      status: 'all',
+    })).toEqual([buyOrder]);
+    expect(filterAdminOrders(orders, {
+      search: 'ivanov',
+      direction: 'BUY_USDT',
+      status: 'completed',
+    })).toEqual([buyOrder]);
+    expect(filterAdminOrders(orders, {
+      search: 'TXndknn',
+      direction: 'SELL_USDT',
+      status: 'awaiting_deposit',
+    })).toEqual([sampleAdminOrder]);
+    expect(filterAdminOrders(orders, {
+      search: 'not-found',
+      direction: 'all',
+      status: 'all',
+    })).toEqual([]);
   });
 });

@@ -1110,6 +1110,10 @@ describe('createApiApp', () => {
         url: '/api/admin/orders/active',
       },
       {
+        method: 'GET' as const,
+        url: '/api/admin/orders/history',
+      },
+      {
         method: 'POST' as const,
         url: '/api/admin/orders/E74737/status',
         headers: { 'x-admin-actor-id': 'manager-1' },
@@ -1197,6 +1201,10 @@ describe('createApiApp', () => {
         url: '/api/admin/orders/active',
       },
       {
+        method: 'GET' as const,
+        url: '/api/admin/orders/history',
+      },
+      {
         method: 'POST' as const,
         url: '/api/admin/orders/E74737/status',
         payload: { status: 'cancelled' },
@@ -1245,6 +1253,54 @@ describe('createApiApp', () => {
           publicId: 'E74737',
           direction: 'SELL_USDT',
           status: 'awaiting_deposit',
+        },
+      ],
+    });
+    expect(db.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({
+          userId: expect.any(String),
+        }),
+        take: 10,
+      }),
+    );
+    await app.close();
+  });
+
+  it('lists history orders for managers through an admin route', async () => {
+    const db = createDb({
+      readOrders: [
+        createReadableOrder({
+          status: 'completed',
+          completedAt: new Date('2026-05-11T10:30:00.000Z'),
+        }),
+      ],
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/orders/history?limit=10',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+        'x-admin-actor-id': 'manager-1',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      orders: [
+        {
+          publicId: 'E74737',
+          direction: 'SELL_USDT',
+          status: 'completed',
+          completedAt: '2026-05-11T10:30:00.000Z',
         },
       ],
     });
@@ -1329,6 +1385,35 @@ describe('createApiApp', () => {
     await app.close();
   });
 
+  it('requires an admin actor header on manager-wide history order lists', async () => {
+    const db = createDb({
+      readOrders: [createReadableOrder({ status: 'completed' })],
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/orders/history?limit=10',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: 'admin_auth_invalid',
+      message: 'admin actor id is required',
+    });
+    expect(db.order.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it('rejects user filters on manager-wide active order lists', async () => {
     const db = createDb({
       readOrders: [createReadableOrder()],
@@ -1344,6 +1429,40 @@ describe('createApiApp', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/api/admin/orders/active?userId=user-1&limit=10',
+      headers: {
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+        'x-admin-actor-id': 'manager-1',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: 'invalid_request',
+      issues: [
+        expect.objectContaining({
+          message: expect.stringContaining('userId'),
+        }),
+      ],
+    });
+    expect(db.order.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('rejects user filters on manager-wide history order lists', async () => {
+    const db = createDb({
+      readOrders: [createReadableOrder({ status: 'completed' })],
+    });
+    const app = createApiApp({
+      db,
+      enableAdminRoutes: true,
+      adminApiToken: ADMIN_TOKEN,
+      now: () => NOW,
+      publicIdFactory: () => 'E74737',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/orders/history?userId=user-1&limit=10',
       headers: {
         authorization: `Bearer ${ADMIN_TOKEN}`,
         'x-admin-actor-id': 'manager-1',

@@ -38,6 +38,18 @@ describe('Admin App API client', () => {
         return jsonResponse({ orders: [sampleAdminOrder] });
       }
 
+      if (url === 'https://api.example.test/api/admin/orders/history?limit=10') {
+        return jsonResponse({
+          orders: [
+            {
+              ...sampleAdminOrder,
+              status: 'completed',
+              completedAt: '2026-05-11T10:30:00.000Z',
+            },
+          ],
+        });
+      }
+
       if (url === 'https://api.example.test/api/admin/orders/E74737') {
         return jsonResponse({ order: sampleAdminOrder });
       }
@@ -90,6 +102,13 @@ describe('Admin App API client', () => {
     });
     await expect(api.listActiveOrders({ token: TOKEN, limit: 25 })).resolves.toEqual([
       sampleAdminOrder,
+    ]);
+    await expect(api.listHistoryOrders({ token: TOKEN, limit: 10 })).resolves.toEqual([
+      {
+        ...sampleAdminOrder,
+        status: 'completed',
+        completedAt: '2026-05-11T10:30:00.000Z',
+      },
     ]);
     await expect(api.getOrder({ token: TOKEN, publicId: 'E74737' })).resolves.toEqual(
       sampleAdminOrder,

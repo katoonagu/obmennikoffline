@@ -34,6 +34,7 @@ describe('API route contracts', () => {
       ['POST', '/api/admin/session', 'admin-password-login'],
       ['POST', '/api/address-pool/import', 'admin-session-or-bearer-and-actor-header'],
       ['GET', '/api/admin/orders/active', 'admin-session-or-bearer-and-actor-header'],
+      ['GET', '/api/admin/orders/history', 'admin-session-or-bearer-and-actor-header'],
       ['GET', '/api/admin/orders/:publicId', 'admin-session-or-bearer-and-actor-header'],
       ['POST', '/api/admin/orders/:publicId/status', 'admin-session-or-bearer-and-actor-header'],
       [
@@ -139,9 +140,19 @@ describe('API route contracts', () => {
       adminRouteContracts,
       '/api/admin/orders/active',
     );
+    const adminHistoryOrdersContract = findRoute(
+      adminRouteContracts,
+      '/api/admin/orders/history',
+    );
 
     expect(
       adminActiveOrdersContract.querySchema?.safeParse({
+        userId: 'user-1',
+        limit: '10',
+      }).success,
+    ).toBe(false);
+    expect(
+      adminHistoryOrdersContract.querySchema?.safeParse({
         userId: 'user-1',
         limit: '10',
       }).success,

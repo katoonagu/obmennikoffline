@@ -121,6 +121,7 @@ Admin API:
 | `POST` | `/api/admin/session` | Create an admin session |
 | `POST` | `/api/address-pool/import` | Import public TRON addresses |
 | `GET` | `/api/admin/orders/active` | Read active order queue |
+| `GET` | `/api/admin/orders/history` | Read manager order history |
 | `GET` | `/api/admin/orders/:publicId` | Read one manager order detail |
 | `POST` | `/api/admin/orders/:publicId/status` | Change order status |
 | `POST` | `/api/admin/orders/:publicId/manual-crypto-payout` | Record manual crypto payout tx id |
@@ -154,6 +155,7 @@ the existing admin API:
 
 - login through `POST /api/admin/session`;
 - active order queue through `GET /api/admin/orders/active`;
+- history queue through `GET /api/admin/orders/history`;
 - order detail through `GET /api/admin/orders/:publicId`;
 - status changes with optional audit comment;
 - manual BUY payout tx hash recording;

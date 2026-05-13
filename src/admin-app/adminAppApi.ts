@@ -28,6 +28,10 @@ export interface AdminAppApi {
     token: string;
     limit?: number;
   }): Promise<OrderDto[]>;
+  listHistoryOrders(input: {
+    token: string;
+    limit?: number;
+  }): Promise<OrderDto[]>;
   getOrder(input: {
     token: string;
     publicId: string;
@@ -72,6 +76,20 @@ export function createAdminAppApiClient(input: {
       const search = new URLSearchParams({ limit: String(limit) });
       const response = await fetchImpl(
         `${baseUrl}/api/admin/orders/active?${search.toString()}`,
+        {
+          method: 'GET',
+          headers: adminHeaders(token),
+        },
+      );
+      const payload = await parseJsonResponse(response, ordersResponseSchema);
+
+      return payload.orders;
+    },
+
+    async listHistoryOrders({ token, limit = 20 }) {
+      const search = new URLSearchParams({ limit: String(limit) });
+      const response = await fetchImpl(
+        `${baseUrl}/api/admin/orders/history?${search.toString()}`,
         {
           method: 'GET',
           headers: adminHeaders(token),

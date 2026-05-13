@@ -252,6 +252,13 @@ export const adminRouteContracts = [
   },
   {
     method: 'GET',
+    path: '/api/admin/orders/history',
+    auth: 'admin-session-or-bearer-and-actor-header',
+    querySchema: adminOrderListQuerySchema,
+    responseSchema: ordersResponseSchema,
+  },
+  {
+    method: 'GET',
     path: '/api/admin/orders/:publicId',
     auth: 'admin-session-or-bearer-and-actor-header',
     paramsSchema: orderParamsSchema,

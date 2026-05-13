@@ -16,6 +16,32 @@ export const MANAGER_STATUS_OPTIONS = [
   'rejected',
 ] as const satisfies readonly OrderStatus[];
 
+export const ADMIN_ORDER_STATUS_FILTER_OPTIONS = [
+  'draft',
+  'awaiting_deposit',
+  'awaiting_office_visit',
+  'funds_detected',
+  'pending_aml',
+  'manager_review',
+  'ready_for_cash_payout',
+  'ready_for_crypto_payout',
+  'late_payment',
+  'completed',
+  'cancelled',
+  'expired',
+  'rejected',
+] as const satisfies readonly OrderStatus[];
+
+export type AdminOrderListMode = 'active' | 'history';
+export type AdminOrderDirectionFilter = 'all' | OrderDto['direction'];
+export type AdminOrderStatusFilter = 'all' | OrderStatus;
+
+export interface AdminOrderFilters {
+  search: string;
+  direction: AdminOrderDirectionFilter;
+  status: AdminOrderStatusFilter;
+}
+
 const STATUS_LABELS: Record<OrderStatus, string> = {
   draft: 'Черновик',
   awaiting_deposit: 'Ожидает депозит',
@@ -65,8 +91,45 @@ export function canRecordManualCryptoPayout(order: OrderDto): boolean {
   );
 }
 
+export function filterAdminOrders(
+  orders: readonly OrderDto[],
+  filters: AdminOrderFilters,
+): OrderDto[] {
+  const search = normalizeSearch(filters.search);
+
+  return orders.filter((order) => {
+    if (filters.direction !== 'all' && order.direction !== filters.direction) {
+      return false;
+    }
+
+    if (filters.status !== 'all' && order.status !== filters.status) {
+      return false;
+    }
+
+    if (!search) {
+      return true;
+    }
+
+    return createSearchText(order).includes(search);
+  });
+}
+
 export function parseAddressPoolCsvForAdmin(csv: string): AddressPoolCsvRow[] {
   return parseAddressPoolCsv(csv);
+}
+
+function createSearchText(order: OrderDto): string {
+  return normalizeSearch([
+    order.publicId,
+    formatAdminCustomer(order),
+    order.depositAddress ?? '',
+    order.clientPayoutAddress ?? '',
+    order.cryptoPayout?.txId ?? '',
+  ].join(' '));
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function formatUsdt(value: string | null): string {

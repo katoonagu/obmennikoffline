@@ -247,6 +247,28 @@ export async function listAllActiveOrders(
   return orders.map(toOrderDto);
 }
 
+export async function listAllHistoryOrders(
+  db: OrderReadDb,
+  input: {
+    limit?: number;
+  },
+): Promise<OrderDto[]> {
+  const orders = await db.order.findMany({
+    where: {
+      status: {
+        in: HISTORY_ORDER_STATUSES,
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: normalizeLimit(input.limit),
+    select: ORDER_READ_SELECT,
+  });
+
+  return orders.map(toOrderDto);
+}
+
 export async function listHistoryOrders(
   db: OrderReadDb,
   input: {

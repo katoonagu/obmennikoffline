@@ -210,6 +210,49 @@ button:disabled {
   font-size: 17px;
 }
 
+.admin-queue-count {
+  margin-left: auto;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-queue-controls {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.admin-segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-segmented-control button {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--admin-muted);
+  background: transparent;
+  font-weight: 800;
+}
+
+.admin-segmented-control button.active {
+  color: #06100c;
+  background: linear-gradient(135deg, #4be095, #16c7dd);
+}
+
+.admin-filter-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .admin-order-list {
   display: grid;
   gap: 8px;
@@ -296,6 +339,10 @@ button:disabled {
 .admin-field {
   display: grid;
   gap: 7px;
+}
+
+.admin-field.compact {
+  gap: 5px;
 }
 
 .admin-field span {

@@ -21,6 +21,8 @@ import {
   type AdminSessionDto,
 } from './adminAppApi.js';
 import {
+  ADMIN_ORDER_STATUS_FILTER_OPTIONS,
+  filterAdminOrders,
   canRecordManualCryptoPayout,
   formatAdminCustomer,
   formatAdminOrderAmount,
@@ -28,6 +30,8 @@ import {
   formatAdminOrderStatus,
   MANAGER_STATUS_OPTIONS,
   parseAddressPoolCsvForAdmin,
+  type AdminOrderFilters,
+  type AdminOrderListMode,
 } from './adminAppViewModel.js';
 import {
   loadBrowserAdminAppRuntimeConfig,
@@ -38,6 +42,11 @@ import type { OrderDto } from '../orders/orderReadService.js';
 
 const SESSION_STORAGE_KEY = 'obmen.admin.session.v1';
 const DEFAULT_STATUS = 'manager_review' satisfies OrderDto['status'];
+const DEFAULT_ORDER_FILTERS: AdminOrderFilters = {
+  search: '',
+  direction: 'all',
+  status: 'all',
+};
 
 type RuntimeState =
   | {
@@ -59,6 +68,8 @@ export function App() {
   );
   const [session, setSession] = useState<AdminSessionDto | null>(() => readStoredSession());
   const [orders, setOrders] = useState<OrderDto[]>([]);
+  const [orderMode, setOrderMode] = useState<AdminOrderListMode>('active');
+  const [orderFilters, setOrderFilters] = useState<AdminOrderFilters>(DEFAULT_ORDER_FILTERS);
   const [selectedOrder, setSelectedOrder] = useState<OrderDto | null>(null);
   const [statusDraft, setStatusDraft] = useState<OrderDto['status']>(DEFAULT_STATUS);
   const [commentDraft, setCommentDraft] = useState('');
@@ -70,13 +81,23 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  const refreshOrders = useCallback(async (token: string) => {
+  const filteredOrders = useMemo(
+    () => filterAdminOrders(orders, orderFilters),
+    [orders, orderFilters],
+  );
+
+  const refreshOrders = useCallback(async (
+    token: string,
+    mode: AdminOrderListMode = orderMode,
+  ) => {
     if (!api) return;
 
     setLoadingLabel('Загружаем очередь');
     setErrorMessage('');
     try {
-      const nextOrders = await api.listActiveOrders({ token, limit: 50 });
+      const nextOrders = mode === 'history'
+        ? await api.listHistoryOrders({ token, limit: 50 })
+        : await api.listActiveOrders({ token, limit: 50 });
       setOrders(nextOrders);
       setSelectedOrder((current) => {
         const refreshed = current
@@ -92,13 +113,13 @@ export function App() {
     } finally {
       setLoadingLabel('');
     }
-  }, [api]);
+  }, [api, orderMode]);
 
   useEffect(() => {
     if (session) {
-      void refreshOrders(session.token);
+      void refreshOrders(session.token, orderMode);
     }
-  }, [refreshOrders, session]);
+  }, [orderMode, refreshOrders, session]);
 
   useEffect(() => {
     if (!selectedOrder) return;
@@ -134,7 +155,16 @@ export function App() {
       clearStoredSession();
       setOrders([]);
       setSelectedOrder(null);
+      setOrderMode('active');
+      setOrderFilters(DEFAULT_ORDER_FILTERS);
     }
+  }
+
+  function updateOrderFilters(nextFilters: Partial<AdminOrderFilters>) {
+    setOrderFilters((current) => ({
+      ...current,
+      ...nextFilters,
+    }));
   }
 
   async function openOrder(publicId: string) {
@@ -262,7 +292,7 @@ export function App() {
           <button
             className="admin-icon-button"
             type="button"
-            onClick={() => void refreshOrders(session.token)}
+            onClick={() => void refreshOrders(session.token, orderMode)}
             aria-label="Обновить очередь"
           >
             <RefreshCcw size={17} />
@@ -288,8 +318,13 @@ export function App() {
 
       <section className="admin-dashboard">
         <OrderQueue
-          orders={orders}
+          orders={filteredOrders}
+          totalCount={orders.length}
+          mode={orderMode}
+          filters={orderFilters}
           selectedPublicId={selectedOrder?.publicId}
+          onModeChange={setOrderMode}
+          onFiltersChange={updateOrderFilters}
           onOpenOrder={(publicId) => void openOrder(publicId)}
         />
 
@@ -464,22 +499,94 @@ function LoginScreen({
 
 function OrderQueue({
   orders,
+  totalCount,
+  mode,
+  filters,
   selectedPublicId,
+  onModeChange,
+  onFiltersChange,
   onOpenOrder,
 }: {
   orders: OrderDto[];
+  totalCount: number;
+  mode: AdminOrderListMode;
+  filters: AdminOrderFilters;
   selectedPublicId: string | undefined;
+  onModeChange: (mode: AdminOrderListMode) => void;
+  onFiltersChange: (filters: Partial<AdminOrderFilters>) => void;
   onOpenOrder: (publicId: string) => void;
 }) {
+  const emptyText = totalCount === 0
+    ? (mode === 'history' ? 'История заявок пуста' : 'Пустая очередь')
+    : 'Нет заявок по текущему фильтру';
+
   return (
     <section className="admin-order-queue">
       <div className="admin-section-title">
         <ClipboardList size={18} />
         <h2>Очередь заявок</h2>
+        <span className="admin-queue-count">{orders.length}/{totalCount}</span>
+      </div>
+      <div className="admin-queue-controls">
+        <div className="admin-segmented-control" aria-label="Раздел заявок">
+          <button
+            className={mode === 'active' ? 'active' : undefined}
+            type="button"
+            onClick={() => onModeChange('active')}
+          >
+            Активные
+          </button>
+          <button
+            className={mode === 'history' ? 'active' : undefined}
+            type="button"
+            onClick={() => onModeChange('history')}
+          >
+            История
+          </button>
+        </div>
+        <label className="admin-field compact">
+          <span>Поиск</span>
+          <input
+            value={filters.search}
+            onChange={(event) => onFiltersChange({ search: event.target.value })}
+            placeholder="ID, ФИО, адрес, tx hash"
+          />
+        </label>
+        <div className="admin-filter-row">
+          <label className="admin-field compact">
+            <span>Тип</span>
+            <select
+              value={filters.direction}
+              onChange={(event) => onFiltersChange({
+                direction: event.target.value as AdminOrderFilters['direction'],
+              })}
+            >
+              <option value="all">Все типы</option>
+              <option value="BUY_USDT">Покупка USDT</option>
+              <option value="SELL_USDT">Продажа USDT</option>
+            </select>
+          </label>
+          <label className="admin-field compact">
+            <span>Статус</span>
+            <select
+              value={filters.status}
+              onChange={(event) => onFiltersChange({
+                status: event.target.value as AdminOrderFilters['status'],
+              })}
+            >
+              <option value="all">Все статусы</option>
+              {ADMIN_ORDER_STATUS_FILTER_OPTIONS.map((status) => (
+                <option value={status} key={status}>
+                  {formatAdminOrderStatus(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
       {orders.length === 0 ? (
         <div className="admin-empty-state compact">
-          <p>Пустая очередь</p>
+          <p>{emptyText}</p>
         </div>
       ) : (
         <div className="admin-order-list">
