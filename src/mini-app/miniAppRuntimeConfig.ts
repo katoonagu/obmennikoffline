@@ -28,6 +28,7 @@ export interface MiniAppRuntimeConfig {
   apiBaseUrl: string;
   devUserId: string | undefined;
   telegramInitData: string | undefined;
+  showInitDataDebug: boolean;
 }
 
 export function loadMiniAppRuntimeConfig(
@@ -42,6 +43,7 @@ export function loadMiniAppRuntimeConfig(
   const devUserId = telegramInitData
     ? undefined
     : requestedDevUserId;
+  const isProtectedEnvironment = isProtectedMiniAppEnvironment(env);
 
   if (mode === 'api' && !apiBaseUrl) {
     throw new Error('VITE_MINIAPP_API_BASE_URL is required when Mini App API mode is api');
@@ -61,6 +63,7 @@ export function loadMiniAppRuntimeConfig(
     apiBaseUrl: mode === 'api' ? apiBaseUrl : '',
     devUserId,
     telegramInitData,
+    showInitDataDebug: Boolean(telegramInitData) && !isProtectedEnvironment,
   };
 }
 

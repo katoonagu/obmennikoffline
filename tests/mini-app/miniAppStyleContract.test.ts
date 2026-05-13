@@ -79,6 +79,14 @@ describe('Mini App Figma component style contract', () => {
     expect(appCss).toContain('.copy-feedback');
   });
 
+  it('exposes a local Telegram initData copy panel for desktop smoke only', () => {
+    expect(appSource).toContain('function InitDataDebugPanel');
+    expect(appSource).toContain('showInitDataDebug');
+    expect(appSource).toContain('Telegram initData debug');
+    expect(appSource).toContain('CopyButton value={initData}');
+    expect(appCss).toContain('.init-data-debug-panel');
+  });
+
   it('keeps the exchar-style flow structure in OBMEN dark components', () => {
     for (const selector of [
       '.home-rate-header',

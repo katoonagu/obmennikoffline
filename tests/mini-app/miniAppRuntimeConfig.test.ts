@@ -15,6 +15,7 @@ describe('Mini App runtime config and auth bridge', () => {
       apiBaseUrl: '',
       devUserId: undefined,
       telegramInitData: undefined,
+      showInitDataDebug: false,
     });
     await expect(api.listActiveOrders()).resolves.toHaveLength(0);
     await expect(api.listHistoryOrders()).resolves.toHaveLength(0);
@@ -37,6 +38,7 @@ describe('Mini App runtime config and auth bridge', () => {
       apiBaseUrl: 'http://127.0.0.1:3000',
       devUserId: 'dev-user-1',
       telegramInitData: undefined,
+      showInitDataDebug: false,
     });
     await api.listActiveOrders();
   });
@@ -90,6 +92,53 @@ describe('Mini App runtime config and auth bridge', () => {
       apiBaseUrl: 'https://api.example.test',
       devUserId: undefined,
       telegramInitData: 'signed-init-data',
+      showInitDataDebug: false,
+    });
+  });
+
+  it('shows initData copy debug only for non-production Telegram desktop smoke', () => {
+    expect(loadMiniAppRuntimeConfig(
+      {
+        VITE_APP_ENV: 'local',
+        VITE_MINIAPP_API_MODE: 'api',
+        VITE_MINIAPP_API_BASE_URL: 'http://127.0.0.1:3000',
+      },
+      {
+        Telegram: {
+          WebApp: {
+            initData: ' signed-init-data ',
+          },
+        },
+      },
+    )).toMatchObject({
+      telegramInitData: 'signed-init-data',
+      showInitDataDebug: true,
+    });
+
+    expect(loadMiniAppRuntimeConfig({
+      VITE_APP_ENV: 'local',
+      VITE_MINIAPP_API_MODE: 'mock',
+    })).toMatchObject({
+      telegramInitData: undefined,
+      showInitDataDebug: false,
+    });
+
+    expect(loadMiniAppRuntimeConfig(
+      {
+        VITE_APP_ENV: 'production',
+        VITE_MINIAPP_API_MODE: 'api',
+        VITE_MINIAPP_API_BASE_URL: 'https://api.example.test',
+      },
+      {
+        Telegram: {
+          WebApp: {
+            initData: ' signed-init-data ',
+          },
+        },
+      },
+    )).toMatchObject({
+      telegramInitData: 'signed-init-data',
+      showInitDataDebug: false,
     });
   });
 

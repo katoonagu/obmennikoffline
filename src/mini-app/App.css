@@ -926,6 +926,35 @@ button:disabled {
   font-size: 14px;
 }
 
+.init-data-debug-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid rgba(243, 168, 30, 0.42);
+  border-radius: 8px;
+  background: rgba(243, 168, 30, 0.08);
+}
+
+.init-data-debug-panel div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.init-data-debug-panel strong {
+  color: var(--mini-warning);
+  font-size: 13px;
+}
+
+.init-data-debug-panel span {
+  color: var(--mini-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .menu-list {
   display: grid;
   gap: 6px;

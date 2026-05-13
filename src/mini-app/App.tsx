@@ -92,12 +92,16 @@ type BrowserMiniAppRuntimeState =
       api: MiniAppApi;
       isApiMode: boolean;
       isLocalDevAuth: boolean;
+      showInitDataDebug: boolean;
+      telegramInitData: string | undefined;
       errorMessage?: undefined;
     }
   | {
       api: null;
       isApiMode: true;
       isLocalDevAuth: false;
+      showInitDataDebug: false;
+      telegramInitData: undefined;
       errorMessage: string;
     };
 
@@ -119,12 +123,16 @@ function createBrowserMiniAppRuntimeState(): BrowserMiniAppRuntimeState {
       api: createMiniAppApiFromRuntimeConfig(config),
       isApiMode: config.mode === 'api',
       isLocalDevAuth: config.mode === 'api' && config.devUserId !== undefined,
+      showInitDataDebug: config.showInitDataDebug,
+      telegramInitData: config.telegramInitData,
     };
   } catch (error) {
     return {
       api: null,
       isApiMode: true,
       isLocalDevAuth: false,
+      showInitDataDebug: false,
+      telegramInitData: undefined,
       errorMessage: error instanceof Error
         ? error.message
         : 'Mini App runtime config is invalid',
@@ -352,6 +360,9 @@ export function App() {
 
         <section className="screen-scroll" ref={screenScrollRef}>
           {loadingLabel && <div className="sync-banner">{loadingLabel}</div>}
+          {runtimeState.showInitDataDebug && runtimeState.telegramInitData ? (
+            <InitDataDebugPanel initData={runtimeState.telegramInitData} />
+          ) : null}
           {bootstrapError ? (
             <BlockingErrorScreen message={bootstrapError} />
           ) : (
@@ -1128,6 +1139,18 @@ function ProfileScreen({
         </button>
       </div>
     </div>
+  );
+}
+
+function InitDataDebugPanel({ initData }: { initData: string }) {
+  return (
+    <section className="init-data-debug-panel" aria-label="Telegram initData debug">
+      <div>
+        <strong>Telegram initData debug</strong>
+        <span>Скопируй значение в TELEGRAM_INIT_DATA для staging smoke.</span>
+      </div>
+      <CopyButton value={initData} label="Telegram initData" />
+    </section>
   );
 }
 
