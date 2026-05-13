@@ -8,6 +8,18 @@ const packageJson = JSON.parse(
 };
 
 describe('package scripts', () => {
+  it('builds compiled API code and the Mini App bundle for Railway', () => {
+    expect(packageJson.scripts.build).toBe(
+      'pnpm prisma:generate && tsc -p tsconfig.json && pnpm build:miniapp',
+    );
+  });
+
+  it('starts production by applying migrations and running the compiled API server', () => {
+    expect(packageJson.scripts.start).toBe(
+      'pnpm exec prisma migrate deploy && node dist/src/api/server.js',
+    );
+  });
+
   it('runs the TRON deposit watcher from built JavaScript in production', () => {
     expect(packageJson.scripts['tron:watch-deposits-once']).toBe(
       'node dist/src/tron/watchDepositsOnceCli.js',

@@ -5,7 +5,8 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm prisma:generate && tsc -p tsconfig.json && pnpm build:miniapp",
+    "start": "pnpm exec prisma migrate deploy && node dist/src/api/server.js",
     "dev:api": "tsx src/api/server.ts",
     "dev:miniapp": "vite --config frontend/vite.config.ts --host 127.0.0.1",
     "build:miniapp": "vite build --config frontend/vite.config.ts",

@@ -19,4 +19,11 @@ describe('API server entrypoint', () => {
   it('uses the guarded admin API token as the MVP admin session signing secret', () => {
     expect(serverSource).toContain('adminSessionSecret: config.adminApiToken');
   });
+
+  it('registers the built Mini App frontend before listening', () => {
+    expect(serverSource).toContain('registerMiniAppStaticFrontend');
+    expect(serverSource.indexOf('registerMiniAppStaticFrontend')).toBeLessThan(
+      serverSource.indexOf('await app.listen'),
+    );
+  });
 });

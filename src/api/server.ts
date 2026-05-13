@@ -1,6 +1,9 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createApiApp, type ApiDb } from './createApp.js';
 import { loadEnvFileIfPresent } from './envFile.js';
 import { loadServerConfig } from './serverConfig.js';
+import { registerMiniAppStaticFrontend } from './staticFrontend.js';
 import { createStaticUsdtRubRateProvider } from '../rates/rateQuoteService.js';
 
 loadEnvFileIfPresent();
@@ -21,4 +24,15 @@ const app = createApiApp({
   rateProvider: createStaticUsdtRubRateProvider(config.rates),
 });
 
+registerMiniAppStaticFrontend(app, { rootDir: resolveMiniAppBuildRoot() });
+
 await app.listen({ port: config.port, host: config.host });
+
+function resolveMiniAppBuildRoot(): string {
+  const compiledBuildRoot = fileURLToPath(new URL('../../mini-app', import.meta.url));
+  if (existsSync(compiledBuildRoot)) {
+    return compiledBuildRoot;
+  }
+
+  return fileURLToPath(new URL('../../dist/mini-app', import.meta.url));
+}
