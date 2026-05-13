@@ -36,6 +36,8 @@ describe('.env.example contract', () => {
     expect(envExample).toContain('TRON_API_KEY');
     expect(envExample).toContain('TRON_WATCHER_CURSOR_ID');
     expect(envExample).toContain('TRON_WATCHER_ADDRESS_BATCH_SIZE');
+    expect(envExample).toContain('TRON_REPLAY_FROM_BLOCK');
+    expect(envExample).toContain('TRON_REPLAY_TO_BLOCK');
     expect(envExample).toContain('ORDER_EXPIRATION_LIMIT');
     expect(envExample).not.toContain('TRON_MNEMONIC=');
     expect(envExample).not.toContain('PRIVATE_KEY=');

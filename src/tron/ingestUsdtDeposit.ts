@@ -13,6 +13,7 @@ export interface WatchedDepositAddressRecord {
   id: string;
   address: string;
   status: DepositAddressStatus;
+  reservedAt: Date | null;
   order: WatchedOrderRecord | null;
 }
 
@@ -45,6 +46,13 @@ export type DepositIngestionResult =
       status: 'ignored_ineligible_order';
       orderPublicId: string;
       currentStatus: OrderStatus;
+    }
+  | {
+      status: 'ignored_before_reservation';
+      orderPublicId: string;
+      toAddress: string;
+      blockTimestamp: Date;
+      reservedAt: Date;
     };
 
 export interface DepositIngestionTransaction {
@@ -116,6 +124,7 @@ const WATCHED_DEPOSIT_ADDRESS_SELECT = {
   id: true,
   address: true,
   status: true,
+  reservedAt: true,
   order: {
     select: {
       id: true,
@@ -156,6 +165,19 @@ export async function ingestUsdtDepositInDb(
     }
 
     const order = depositAddress.order;
+    if (
+      depositAddress.reservedAt &&
+      input.transfer.blockTimestamp.getTime() < depositAddress.reservedAt.getTime()
+    ) {
+      return {
+        status: 'ignored_before_reservation',
+        orderPublicId: order.publicId,
+        toAddress: input.transfer.toAddress,
+        blockTimestamp: input.transfer.blockTimestamp,
+        reservedAt: depositAddress.reservedAt,
+      };
+    }
+
     if (!isDepositAddressOpenForIngestion(depositAddress.status)) {
       return {
         status: 'ignored_ineligible_address',

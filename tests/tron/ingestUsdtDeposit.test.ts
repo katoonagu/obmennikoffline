@@ -13,6 +13,7 @@ const SECOND_TX_ID =
 const FROM_ADDRESS = 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7';
 const DEPOSIT_ADDRESS = 'TXndknnAM2awhzH6p9AidYVKPtUzXmWmkY';
 const BLOCK_TIMESTAMP = new Date('2026-05-11T09:05:00.000Z');
+const RESERVED_AT = new Date('2026-05-11T09:00:00.000Z');
 
 function createTransfer(
   overrides: Partial<NormalizedBlockchainTransaction> = {},
@@ -38,6 +39,7 @@ function createWatchedAddress(
     id: 'addr-1',
     address: DEPOSIT_ADDRESS,
     status: 'reserved',
+    reservedAt: RESERVED_AT,
     order: {
       id: 'order-db-1',
       publicId: 'E74737',
@@ -108,6 +110,14 @@ describe('ingestUsdtDepositInDb', () => {
         orderId: 'order-db-1',
       },
     });
+    expect(tx.depositAddress.findUnique).toHaveBeenCalledWith({
+      where: {
+        address: DEPOSIT_ADDRESS,
+      },
+      select: expect.objectContaining({
+        reservedAt: true,
+      }),
+    });
     expect(tx.order.updateMany).toHaveBeenCalledWith({
       where: {
         id: 'order-db-1',
@@ -149,6 +159,31 @@ describe('ingestUsdtDepositInDb', () => {
         createdAt: BLOCK_TIMESTAMP,
       },
     });
+  });
+
+  it('ignores historical transfers that happened before the address reservation', async () => {
+    const tx = createTx(createWatchedAddress());
+    const db = createDb(tx);
+    const historicalTimestamp = new Date('2026-05-11T08:59:59.000Z');
+
+    await expect(
+      ingestUsdtDepositInDb(db, {
+        transfer: createTransfer({
+          blockTimestamp: historicalTimestamp,
+        }),
+      }),
+    ).resolves.toEqual({
+      status: 'ignored_before_reservation',
+      orderPublicId: 'E74737',
+      toAddress: DEPOSIT_ADDRESS,
+      blockTimestamp: historicalTimestamp,
+      reservedAt: RESERVED_AT,
+    });
+
+    expect(tx.blockchainTransaction.create).not.toHaveBeenCalled();
+    expect(tx.order.updateMany).not.toHaveBeenCalled();
+    expect(tx.depositAddress.updateMany).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('marks deposits after order expiry as late payments', async () => {
@@ -268,6 +303,154 @@ describe('ingestUsdtDepositInDb', () => {
         }),
       }),
     );
+  });
+
+  it('sends a 999 USDT transfer for a 1000 USDT order to manager review', async () => {
+    const tx = createTx(
+      createWatchedAddress({
+        order: {
+          id: 'order-db-1',
+          publicId: 'E74737',
+          status: 'awaiting_deposit',
+          amountUsdt: { toFixed: () => '1000.000000', toString: () => '1000' },
+          orderExpiresAt: new Date('2026-05-11T10:00:00.000Z'),
+        },
+      }),
+    );
+    const db = createDb(tx);
+
+    await expect(
+      ingestUsdtDepositInDb(db, {
+        transfer: createTransfer({ amount: '999.000000' }),
+      }),
+    ).resolves.toMatchObject({
+      status: 'processed',
+      nextOrderStatus: 'manager_review',
+      depositAddressStatus: 'funded',
+    });
+
+    expect(tx.blockchainTransaction.create).toHaveBeenCalled();
+    expect(tx.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          status: 'manager_review',
+        },
+      }),
+    );
+  });
+
+  it('records two half payments and keeps the order in manager review', async () => {
+    const recordedTransactions: unknown[] = [];
+    const firstTx = createTx(
+      createWatchedAddress({
+        order: {
+          id: 'order-db-1',
+          publicId: 'E74737',
+          status: 'awaiting_deposit',
+          amountUsdt: { toFixed: () => '1000.000000', toString: () => '1000' },
+          orderExpiresAt: new Date('2026-05-11T10:00:00.000Z'),
+        },
+      }),
+    );
+    const secondTx = createTx(
+      createWatchedAddress({
+        status: 'funded',
+        order: {
+          id: 'order-db-1',
+          publicId: 'E74737',
+          status: 'manager_review',
+          amountUsdt: { toFixed: () => '1000.000000', toString: () => '1000' },
+          orderExpiresAt: new Date('2026-05-11T10:00:00.000Z'),
+        },
+      }),
+    );
+    vi.mocked(firstTx.blockchainTransaction.create).mockImplementation(async ({ data }) => {
+      recordedTransactions.push(data);
+      return { id: 'tx-db-1', ...data };
+    });
+    vi.mocked(secondTx.blockchainTransaction.create).mockImplementation(async ({ data }) => {
+      recordedTransactions.push(data);
+      return { id: 'tx-db-2', ...data };
+    });
+
+    await expect(
+      ingestUsdtDepositInDb(createDb(firstTx), {
+        transfer: createTransfer({
+          amount: '500.000000',
+        }),
+      }),
+    ).resolves.toMatchObject({
+      status: 'processed',
+      nextOrderStatus: 'manager_review',
+    });
+    await expect(
+      ingestUsdtDepositInDb(createDb(secondTx), {
+        transfer: createTransfer({
+          txId: SECOND_TX_ID,
+          logIndex: 1,
+          amount: '500.000000',
+        }),
+      }),
+    ).resolves.toMatchObject({
+      status: 'processed',
+      nextOrderStatus: 'manager_review',
+    });
+
+    expect(recordedTransactions).toHaveLength(2);
+    expect(firstTx.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          status: 'manager_review',
+        },
+      }),
+    );
+    expect(secondTx.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          status: 'manager_review',
+        },
+      }),
+    );
+  });
+
+  it('ignores extra transfers after an exact payment already detected funds', async () => {
+    const firstTx = createTx(createWatchedAddress());
+    const secondTx = createTx(
+      createWatchedAddress({
+        status: 'funded',
+        order: {
+          id: 'order-db-1',
+          publicId: 'E74737',
+          status: 'funds_detected',
+          amountUsdt: { toFixed: () => '5000.000000', toString: () => '5000' },
+          orderExpiresAt: new Date('2026-05-11T10:00:00.000Z'),
+        },
+      }),
+    );
+
+    await expect(
+      ingestUsdtDepositInDb(createDb(firstTx), { transfer: createTransfer() }),
+    ).resolves.toMatchObject({
+      status: 'processed',
+      nextOrderStatus: 'funds_detected',
+    });
+    await expect(
+      ingestUsdtDepositInDb(createDb(secondTx), {
+        transfer: createTransfer({
+          txId: SECOND_TX_ID,
+          logIndex: 1,
+          amount: '1.000000',
+        }),
+      }),
+    ).resolves.toEqual({
+      status: 'ignored_ineligible_order',
+      orderPublicId: 'E74737',
+      currentStatus: 'funds_detected',
+    });
+
+    expect(firstTx.blockchainTransaction.create).toHaveBeenCalledTimes(1);
+    expect(secondTx.blockchainTransaction.create).not.toHaveBeenCalled();
+    expect(secondTx.order.updateMany).not.toHaveBeenCalled();
   });
 
   it('is idempotent when the transaction event was already recorded', async () => {

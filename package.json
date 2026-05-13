@@ -20,6 +20,7 @@
     "admin:disable-user": "node dist/src/admin/disableAdminUserCli.js",
     "tron:watch-deposits-once": "node dist/src/tron/watchDepositsOnceCli.js",
     "tron:configure-watcher-cursor": "node dist/src/tron/configureWatcherCursorCli.js",
+    "tron:replay-deposits-dry-run": "node dist/src/tron/replayDepositsDryRunCli.js",
     "orders:expire-open": "node dist/src/orders/expireOrdersCli.js",
     "staging:smoke": "node dist/src/smoke/stagingSmokeCli.js"
   },

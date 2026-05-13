@@ -10,6 +10,10 @@ describe('operations documentation contracts', () => {
     const runbook = readFileSync(schedulerRunbookUrl, 'utf8');
 
     expect(runbook).toContain('pnpm tron:watch-deposits-once');
+    expect(runbook).toContain('pnpm tron:replay-deposits-dry-run');
+    expect(runbook).toContain('TRON_REPLAY_FROM_BLOCK');
+    expect(runbook).toContain('TRON_REPLAY_TO_BLOCK');
+    expect(runbook).toContain('Dry-run replay does not mutate orders, deposit addresses, blockchain transactions, or audit logs');
     expect(runbook).toContain('pnpm orders:expire-open');
     expect(runbook).toContain('one-shot');
     expect(runbook).toContain('single active instance');

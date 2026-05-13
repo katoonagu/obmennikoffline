@@ -538,9 +538,20 @@ Run one watcher pass:
 pnpm tron:watch-deposits-once
 ```
 
+Replay historical TRON events without writing to the database:
+
+```powershell
+$env:TRON_REPLAY_FROM_BLOCK="64200000"
+$env:TRON_REPLAY_TO_BLOCK="64200100"
+pnpm tron:replay-deposits-dry-run
+```
+
 The watcher uses `TRON_FULL_HOST`, optional `TRON_EVENT_SERVER`, optional
 `TRON_API_KEY`, `TRON_WATCHER_CURSOR_ID`, and
 `TRON_WATCHER_ADDRESS_BATCH_SIZE` from the process environment.
+Dry-run replay also requires `TRON_REPLAY_FROM_BLOCK` and
+`TRON_REPLAY_TO_BLOCK`.
+Dry-run replay does not mutate orders, deposit addresses, blockchain transactions, or audit logs; it only prints how matching historical transfers would be classified.
 The watcher is intentionally one-shot. Run it from cron, systemd timer, Docker
 scheduled job, or another scheduler. Do not run live mainnet tests from this
 repo without an explicit funded test plan.

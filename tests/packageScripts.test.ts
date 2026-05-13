@@ -39,6 +39,12 @@ describe('package scripts', () => {
     );
   });
 
+  it('replays TRON deposit history in dry-run mode from built JavaScript', () => {
+    expect(packageJson.scripts['tron:replay-deposits-dry-run']).toBe(
+      'node dist/src/tron/replayDepositsDryRunCli.js',
+    );
+  });
+
   it('expires open orders from built JavaScript in production', () => {
     expect(packageJson.scripts['orders:expire-open']).toBe(
       'node dist/src/orders/expireOrdersCli.js',

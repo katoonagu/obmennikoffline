@@ -48,6 +48,7 @@ function createWatchedAddress(
     id: 'addr-1',
     address: DEPOSIT_ADDRESS,
     status: 'reserved',
+    reservedAt: new Date('2026-05-11T09:00:00.000Z'),
     order: {
       id: 'order-db-1',
       publicId: 'E74737',

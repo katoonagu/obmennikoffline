@@ -50,9 +50,13 @@ describe('README runbook', () => {
     expect(readme).toContain('VITE_ADMIN_API_BASE_URL');
     expect(readme).toContain('TRON_FULL_HOST');
     expect(readme).toContain('TRON_WATCHER_ADDRESS_BATCH_SIZE');
+    expect(readme).toContain('TRON_REPLAY_FROM_BLOCK');
+    expect(readme).toContain('TRON_REPLAY_TO_BLOCK');
     expect(readme).toContain('ORDER_EXPIRATION_LIMIT');
     expect(readme).toContain('pnpm tron:configure-watcher-cursor');
     expect(readme).toContain('pnpm tron:watch-deposits-once');
+    expect(readme).toContain('pnpm tron:replay-deposits-dry-run');
+    expect(readme).toContain('Dry-run replay does not mutate orders, deposit addresses, blockchain transactions, or audit logs');
     expect(readme).toContain('pnpm orders:expire-open');
     expect(readme).toContain('pnpm staging:smoke');
     expect(readme).toContain('TELEGRAM_INIT_DATA');

@@ -17,6 +17,14 @@ Run one TRON deposit watcher pass:
 pnpm tron:watch-deposits-once
 ```
 
+Replay historical TRON deposit events without mutating the database:
+
+```powershell
+$env:TRON_REPLAY_FROM_BLOCK="64200000"
+$env:TRON_REPLAY_TO_BLOCK="64200100"
+pnpm tron:replay-deposits-dry-run
+```
+
 Run one order expiration pass:
 
 ```powershell
@@ -79,8 +87,13 @@ pnpm admin:disable-user
     `tron-usdt-deposits`.
   - `TRON_WATCHER_ADDRESS_BATCH_SIZE`: watched deposit address batch size.
     Defaults to `100` when unset.
+  - `TRON_REPLAY_FROM_BLOCK`: required start block for
+    `pnpm tron:replay-deposits-dry-run`.
+  - `TRON_REPLAY_TO_BLOCK`: required end block for
+    `pnpm tron:replay-deposits-dry-run`.
 - Treat `pnpm tron:watch-deposits-once` as a one-shot command. The external
   scheduler owns retries and intervals.
+- Dry-run replay does not mutate orders, deposit addresses, blockchain transactions, or audit logs. Use it for historical provider checks and reconciliation before deciding whether to run the mutating watcher.
 - recommended interval for `pnpm tron:watch-deposits-once`: every 1 minute for
   MVP operations, adjusted to provider limits.
 - `ORDER_EXPIRATION_LIMIT` controls the max expired orders per one
