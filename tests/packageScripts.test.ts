@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 const packageJson = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
 ) as {
+  dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
   scripts: Record<string, string>;
 };
 
@@ -18,6 +20,11 @@ describe('package scripts', () => {
     expect(packageJson.scripts.start).toBe(
       'pnpm exec prisma migrate deploy && node dist/src/api/server.js',
     );
+  });
+
+  it('keeps Prisma CLI available to the production start command', () => {
+    expect(packageJson.dependencies).toHaveProperty('prisma');
+    expect(packageJson.devDependencies).not.toHaveProperty('prisma');
   });
 
   it('runs the TRON deposit watcher from built JavaScript in production', () => {
