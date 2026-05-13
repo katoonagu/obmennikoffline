@@ -13,6 +13,7 @@ export interface MiniAppRuntimeEnv {
   VITE_MINIAPP_API_MODE?: string;
   VITE_MINIAPP_API_BASE_URL?: string;
   VITE_MINIAPP_DEV_USER_ID?: string;
+  VITE_MINIAPP_INIT_DATA_DEBUG_ENABLED?: string;
 }
 
 export interface MiniAppTelegramSource {
@@ -40,6 +41,8 @@ export function loadMiniAppRuntimeConfig(
   const mode = resolveApiMode(explicitMode, apiBaseUrl);
   const telegramInitData = readTelegramInitData(telegramSource);
   const requestedDevUserId = readOptionalEnv(env.VITE_MINIAPP_DEV_USER_ID);
+  const showProtectedInitDataDebug =
+    readOptionalEnv(env.VITE_MINIAPP_INIT_DATA_DEBUG_ENABLED) === 'true';
   const devUserId = telegramInitData
     ? undefined
     : requestedDevUserId;
@@ -63,7 +66,9 @@ export function loadMiniAppRuntimeConfig(
     apiBaseUrl: mode === 'api' ? apiBaseUrl : '',
     devUserId,
     telegramInitData,
-    showInitDataDebug: Boolean(telegramInitData) && !isProtectedEnvironment,
+    showInitDataDebug: Boolean(telegramInitData) && (
+      !isProtectedEnvironment || showProtectedInitDataDebug
+    ),
   };
 }
 

@@ -15,6 +15,10 @@ const packageJson = JSON.parse(
 ) as {
   scripts: Record<string, string>;
 };
+const miniAppHtml = readFileSync(
+  new URL('../../frontend/index.html', import.meta.url),
+  'utf8',
+);
 
 describe('Telegram Mini App frontend contract', () => {
   it('locks the selected OBMEN design direction', () => {
@@ -79,5 +83,12 @@ describe('Telegram Mini App frontend contract', () => {
     expect(
       existsSync(new URL('../../src/mini-app/App.tsx', import.meta.url)),
     ).toBe(true);
+  });
+
+  it('loads the official Telegram WebApp bridge before the Mini App bundle', () => {
+    expect(miniAppHtml).toContain('https://telegram.org/js/telegram-web-app.js');
+    expect(miniAppHtml.indexOf('telegram-web-app.js')).toBeLessThan(
+      miniAppHtml.indexOf('/src/mini-app/main.tsx'),
+    );
   });
 });

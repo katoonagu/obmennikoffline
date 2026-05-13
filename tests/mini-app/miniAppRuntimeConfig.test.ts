@@ -128,6 +128,7 @@ describe('Mini App runtime config and auth bridge', () => {
         VITE_APP_ENV: 'production',
         VITE_MINIAPP_API_MODE: 'api',
         VITE_MINIAPP_API_BASE_URL: 'https://api.example.test',
+        VITE_MINIAPP_INIT_DATA_DEBUG_ENABLED: 'true',
       },
       {
         Telegram: {
@@ -138,7 +139,7 @@ describe('Mini App runtime config and auth bridge', () => {
       },
     )).toMatchObject({
       telegramInitData: 'signed-init-data',
-      showInitDataDebug: false,
+      showInitDataDebug: true,
     });
   });
 
