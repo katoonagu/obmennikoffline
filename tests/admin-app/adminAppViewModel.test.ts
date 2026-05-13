@@ -5,6 +5,8 @@ import {
   formatAdminOrderAmount,
   formatAdminOrderDirection,
   formatAdminOrderStatus,
+  getManagerStatusOptions,
+  isTerminalAdminOrder,
   parseAddressPoolCsvForAdmin,
 } from '../../src/admin-app/adminAppViewModel.js';
 import { sampleAdminOrder } from './adminAppFixtures.js';
@@ -25,6 +27,54 @@ describe('Admin App view model', () => {
       depositAddress: null,
       clientPayoutAddress: 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7',
     })).toBe(true);
+  });
+
+  it('returns manager status options that match order direction', () => {
+    const buyOrder = {
+      ...sampleAdminOrder,
+      direction: 'BUY_USDT',
+      status: 'awaiting_office_visit',
+      depositAddress: null,
+      clientPayoutAddress: 'TTDAU9ovqbKPqVVy2TeZ4pKCrLRh6rR5R7',
+    } as const;
+
+    expect(getManagerStatusOptions(buyOrder)).toEqual([
+      'pending_aml',
+      'manager_review',
+      'ready_for_crypto_payout',
+      'cancelled',
+      'expired',
+      'rejected',
+    ]);
+    expect(getManagerStatusOptions(sampleAdminOrder)).toEqual([
+      'pending_aml',
+      'manager_review',
+      'ready_for_cash_payout',
+      'completed',
+      'cancelled',
+      'expired',
+      'rejected',
+    ]);
+  });
+
+  it('marks completed, cancelled, expired, and rejected orders as terminal', () => {
+    expect(isTerminalAdminOrder({
+      ...sampleAdminOrder,
+      status: 'completed',
+    })).toBe(true);
+    expect(isTerminalAdminOrder({
+      ...sampleAdminOrder,
+      status: 'cancelled',
+    })).toBe(true);
+    expect(isTerminalAdminOrder({
+      ...sampleAdminOrder,
+      status: 'expired',
+    })).toBe(true);
+    expect(isTerminalAdminOrder({
+      ...sampleAdminOrder,
+      status: 'rejected',
+    })).toBe(true);
+    expect(isTerminalAdminOrder(sampleAdminOrder)).toBe(false);
   });
 
   it('parses public address pool CSV rows for the import screen', () => {

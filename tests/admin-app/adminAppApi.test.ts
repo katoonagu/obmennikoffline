@@ -148,6 +148,14 @@ describe('Admin App API client', () => {
       message: 'manual crypto payout can only be recorded for BUY_USDT orders',
     })).toBe('Tx hash можно записать только для BUY-заявки.');
     expect(parseAdminApiErrorMessage({
+      error: 'validation_error',
+      message: 'SELL_USDT orders cannot move to crypto payout status',
+    })).toBe('SELL-заявка не может перейти в выплату USDT. Для SELL менеджер выплачивает RUB в офисе.');
+    expect(parseAdminApiErrorMessage({
+      error: 'validation_error',
+      message: 'terminal orders cannot be changed by manager status update',
+    })).toBe('Закрытую заявку из истории нельзя изменить через смену статуса.');
+    expect(parseAdminApiErrorMessage({
       error: 'not_found',
       message: 'order not found',
     })).toBe('Заявка не найдена.');

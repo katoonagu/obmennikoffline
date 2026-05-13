@@ -28,7 +28,8 @@ import {
   formatAdminOrderAmount,
   formatAdminOrderDirection,
   formatAdminOrderStatus,
-  MANAGER_STATUS_OPTIONS,
+  getManagerStatusOptions,
+  isTerminalAdminOrder,
   parseAddressPoolCsvForAdmin,
   type AdminOrderFilters,
   type AdminOrderListMode,
@@ -123,10 +124,11 @@ export function App() {
 
   useEffect(() => {
     if (!selectedOrder) return;
+    const statusOptions = getManagerStatusOptions(selectedOrder);
     setStatusDraft(
-      MANAGER_STATUS_OPTIONS.includes(selectedOrder.status as typeof MANAGER_STATUS_OPTIONS[number])
+      statusOptions.includes(selectedOrder.status)
         ? selectedOrder.status
-        : DEFAULT_STATUS,
+        : statusOptions[0] ?? DEFAULT_STATUS,
     );
     setCommentDraft('');
     setTxIdDraft('');
@@ -333,69 +335,95 @@ export function App() {
             <>
               <OrderDetail order={selectedOrder} />
 
-              <form className="admin-status-form" onSubmit={(event) => void submitStatus(event)}>
-                <div className="admin-section-title">
-                  <CheckCircle2 size={18} />
-                  <h2>Изменить статус</h2>
-                </div>
-                <label className="admin-field">
-                  <span>Новый статус</span>
-                  <select
-                    value={statusDraft}
-                    onChange={(event) => setStatusDraft(event.target.value as OrderDto['status'])}
-                  >
-                    {MANAGER_STATUS_OPTIONS.map((status) => (
-                      <option value={status} key={status}>
-                        {formatAdminOrderStatus(status)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="admin-field">
-                  <span>Комментарий для audit log</span>
-                  <textarea
-                    value={commentDraft}
-                    onChange={(event) => setCommentDraft(event.target.value)}
-                    placeholder="Например: клиент прошел AML, готовим выплату"
-                  />
-                </label>
-                <button className="admin-primary-button" type="submit">
-                  Сохранить статус
-                </button>
-              </form>
+              {isTerminalAdminOrder(selectedOrder) ? (
+                <section className="admin-status-form">
+                  <div className="admin-section-title">
+                    <CheckCircle2 size={18} />
+                    <h2>Закрытая заявка</h2>
+                  </div>
+                  <p>
+                    Эта заявка уже находится в истории. Статус, tx hash и выплаты больше не редактируются из очереди менеджера.
+                  </p>
+                </section>
+              ) : (
+                <>
+                  <form className="admin-status-form" onSubmit={(event) => void submitStatus(event)}>
+                    <div className="admin-section-title">
+                      <CheckCircle2 size={18} />
+                      <h2>Изменить статус</h2>
+                    </div>
+                    <label className="admin-field">
+                      <span>Новый статус</span>
+                      <select
+                        value={statusDraft}
+                        onChange={(event) => setStatusDraft(event.target.value as OrderDto['status'])}
+                      >
+                        {getManagerStatusOptions(selectedOrder).map((status) => (
+                          <option value={status} key={status}>
+                            {formatAdminOrderStatus(status)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="admin-field">
+                      <span>Комментарий для audit log</span>
+                      <textarea
+                        value={commentDraft}
+                        onChange={(event) => setCommentDraft(event.target.value)}
+                        placeholder="Например: клиент прошел AML, готовим выплату"
+                      />
+                    </label>
+                    <button className="admin-primary-button" type="submit">
+                      Сохранить статус
+                    </button>
+                  </form>
 
-              <form className="admin-payout-form" onSubmit={(event) => void submitPayout(event)}>
-                <div className="admin-section-title">
-                  <Archive size={18} />
-                  <h2>Записать tx hash</h2>
-                </div>
-                <p>
-                  Используется только для BUY-заявок после ручной отправки USDT с внешнего custody wallet.
-                </p>
-                <label className="admin-field">
-                  <span>TRON tx hash</span>
-                  <input
-                    value={txIdDraft}
-                    onChange={(event) => setTxIdDraft(event.target.value)}
-                    placeholder="64 hex characters"
-                  />
-                </label>
-                <label className="admin-field">
-                  <span>Комментарий</span>
-                  <textarea
-                    value={payoutCommentDraft}
-                    onChange={(event) => setPayoutCommentDraft(event.target.value)}
-                    placeholder="Отправлено после приема RUB в офисе"
-                  />
-                </label>
-                <button
-                  className="admin-secondary-button"
-                  type="submit"
-                  disabled={!canRecordManualCryptoPayout(selectedOrder)}
-                >
-                  Записать выплату
-                </button>
-              </form>
+                  {selectedOrder.direction === 'BUY_USDT' ? (
+                    <form className="admin-payout-form" onSubmit={(event) => void submitPayout(event)}>
+                      <div className="admin-section-title">
+                        <Archive size={18} />
+                        <h2>Записать tx hash</h2>
+                      </div>
+                      <p>
+                        Для BUY-заявки закрытие выполняется только через запись tx hash после ручной отправки USDT на кошелек клиента.
+                      </p>
+                      <label className="admin-field">
+                        <span>TRON tx hash</span>
+                        <input
+                          value={txIdDraft}
+                          onChange={(event) => setTxIdDraft(event.target.value)}
+                          placeholder="64 hex characters"
+                        />
+                      </label>
+                      <label className="admin-field">
+                        <span>Комментарий</span>
+                        <textarea
+                          value={payoutCommentDraft}
+                          onChange={(event) => setPayoutCommentDraft(event.target.value)}
+                          placeholder="Отправлено после приема RUB в офисе"
+                        />
+                      </label>
+                      <button
+                        className="admin-secondary-button"
+                        type="submit"
+                        disabled={!canRecordManualCryptoPayout(selectedOrder)}
+                      >
+                        Записать выплату
+                      </button>
+                    </form>
+                  ) : (
+                    <section className="admin-payout-form">
+                      <div className="admin-section-title">
+                        <Archive size={18} />
+                        <h2>Выплата RUB в офисе</h2>
+                      </div>
+                      <p>
+                        Для SELL-заявки менеджер выплачивает RUB офлайн. После AML/KYC и выплаты переведите статус в “Готово к выплате RUB” или “Завершена”.
+                      </p>
+                    </section>
+                  )}
+                </>
+              )}
             </>
           ) : (
             <div className="admin-empty-state">
@@ -632,13 +660,13 @@ function OrderDetail({ order }: { order: OrderDto }) {
         <DetailLine label="Создана" value={formatDate(order.createdAt)} />
         <DetailLine label="Истекает" value={formatDate(order.orderExpiresAt)} />
         {order.depositAddress ? (
-          <DetailLine label="Deposit address" value={order.depositAddress} mono />
+          <DetailLine label="Депозитный адрес TRC-20" value={order.depositAddress} mono />
         ) : null}
         {order.clientPayoutAddress ? (
-          <DetailLine label="Client payout wallet" value={order.clientPayoutAddress} mono />
+          <DetailLine label="Кошелек клиента TRC-20" value={order.clientPayoutAddress} mono />
         ) : null}
         {order.cryptoPayout ? (
-          <DetailLine label="Crypto payout tx" value={order.cryptoPayout.txId} mono />
+          <DetailLine label="Tx hash выплаты USDT" value={order.cryptoPayout.txId} mono />
         ) : null}
       </div>
     </section>

@@ -79,6 +79,13 @@ const OPEN_FOR_MANUAL_CRYPTO_PAYOUT = new Set<OrderStatus>([
   'ready_for_crypto_payout',
 ]);
 
+const TERMINAL_ORDER_STATUSES = new Set<OrderStatus>([
+  'completed',
+  'cancelled',
+  'expired',
+  'rejected',
+]);
+
 const TRON_TX_ID_PATTERN = /^[0-9a-fA-F]{64}$/;
 const MAX_AUDIT_COMMENT_LENGTH = 500;
 
@@ -161,9 +168,13 @@ export async function setManagerOrderStatusInDb<TOrder>(
   return db.$transaction(async (tx) => {
     const order = await findManagerOrder(tx, publicId);
 
+    if (TERMINAL_ORDER_STATUSES.has(order.status)) {
+      throw new Error('terminal orders cannot be changed by manager status update');
+    }
     if (order.direction === 'BUY_USDT' && input.status === 'completed') {
       throw new Error('BUY_USDT completion requires manual crypto payout tx id');
     }
+    assertManagerStatusFitsDirection(order, input.status);
 
     const updated = await tx.order.update({
       where: {
@@ -249,6 +260,19 @@ async function findManagerOrder<TOrder>(
   }
 
   return order;
+}
+
+function assertManagerStatusFitsDirection(
+  order: ManagerOrderRecord,
+  targetStatus: OrderStatus,
+): void {
+  if (order.direction === 'BUY_USDT' && targetStatus === 'ready_for_cash_payout') {
+    throw new Error('BUY_USDT orders cannot move to cash payout status');
+  }
+
+  if (order.direction === 'SELL_USDT' && targetStatus === 'ready_for_crypto_payout') {
+    throw new Error('SELL_USDT orders cannot move to crypto payout status');
+  }
 }
 
 function isPrismaRecordNotFoundError(error: unknown): boolean {

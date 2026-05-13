@@ -13,6 +13,10 @@ const appSource = readFileSync(
   new URL('../../src/admin-app/App.tsx', import.meta.url),
   'utf8',
 );
+const viewModelSource = readFileSync(
+  new URL('../../src/admin-app/adminAppViewModel.ts', import.meta.url),
+  'utf8',
+);
 const appCss = readFileSync(
   new URL('../../src/admin-app/App.css', import.meta.url),
   'utf8',
@@ -26,7 +30,7 @@ describe('Admin App UI contract', () => {
     expect(viteConfig).toContain('./index.html');
   });
 
-  it('covers the first manager workflow screens and components', () => {
+  it('covers the first manager workflow screens and components in readable Russian', () => {
     for (const sourceText of [
       'Вход менеджера',
       'Очередь заявок',
@@ -38,6 +42,18 @@ describe('Admin App UI contract', () => {
     ]) {
       expect(appSource).toContain(sourceText);
     }
+
+    for (const sourceText of [
+      'Покупка USDT',
+      'Продажа USDT',
+      'Готово к выплате RUB',
+      'Готово к выплате USDT',
+    ]) {
+      expect(viewModelSource).toContain(sourceText);
+    }
+
+    expect(appSource).not.toMatch(/Рџ|Рћ|РЅРµ|в‚Ѕ/);
+    expect(viewModelSource).not.toMatch(/Рџ|Рћ|РЅРµ|в‚Ѕ/);
 
     for (const selector of [
       '.admin-shell',

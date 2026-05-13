@@ -187,6 +187,18 @@ export function parseAdminApiErrorMessage(payload: unknown): string {
     return 'Перед закрытием BUY-заявки запишите tx hash исходящей выплаты.';
   }
 
+  if (message === 'BUY_USDT orders cannot move to cash payout status') {
+    return 'BUY-заявка не может перейти в выплату RUB. Для BUY менеджер отправляет USDT на кошелек клиента.';
+  }
+
+  if (message === 'SELL_USDT orders cannot move to crypto payout status') {
+    return 'SELL-заявка не может перейти в выплату USDT. Для SELL менеджер выплачивает RUB в офисе.';
+  }
+
+  if (message === 'terminal orders cannot be changed by manager status update') {
+    return 'Закрытую заявку из истории нельзя изменить через смену статуса.';
+  }
+
   if (message === 'order is not open for manual crypto payout') {
     return 'Заявка сейчас не готова к записи исходящей выплаты.';
   }

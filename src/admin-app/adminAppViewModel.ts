@@ -16,6 +16,32 @@ export const MANAGER_STATUS_OPTIONS = [
   'rejected',
 ] as const satisfies readonly OrderStatus[];
 
+const BUY_MANAGER_STATUS_OPTIONS = [
+  'pending_aml',
+  'manager_review',
+  'ready_for_crypto_payout',
+  'cancelled',
+  'expired',
+  'rejected',
+] as const satisfies readonly OrderStatus[];
+
+const SELL_MANAGER_STATUS_OPTIONS = [
+  'pending_aml',
+  'manager_review',
+  'ready_for_cash_payout',
+  'completed',
+  'cancelled',
+  'expired',
+  'rejected',
+] as const satisfies readonly OrderStatus[];
+
+const TERMINAL_ADMIN_ORDER_STATUSES = new Set<OrderStatus>([
+  'completed',
+  'cancelled',
+  'expired',
+  'rejected',
+]);
+
 export const ADMIN_ORDER_STATUS_FILTER_OPTIONS = [
   'draft',
   'awaiting_deposit',
@@ -64,6 +90,16 @@ export function formatAdminOrderDirection(order: OrderDto): string {
 
 export function formatAdminOrderStatus(status: OrderStatus): string {
   return STATUS_LABELS[status];
+}
+
+export function getManagerStatusOptions(order: OrderDto): readonly OrderStatus[] {
+  return order.direction === 'BUY_USDT'
+    ? BUY_MANAGER_STATUS_OPTIONS
+    : SELL_MANAGER_STATUS_OPTIONS;
+}
+
+export function isTerminalAdminOrder(order: OrderDto): boolean {
+  return TERMINAL_ADMIN_ORDER_STATUSES.has(order.status);
 }
 
 export function formatAdminOrderAmount(order: OrderDto): string {

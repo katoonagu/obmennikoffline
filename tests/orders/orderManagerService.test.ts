@@ -289,6 +289,68 @@ describe('orderManagerService', () => {
     expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
+  it('rejects manager statuses that do not match the order direction', async () => {
+    const buyTx = createTx(createOrder({
+      direction: 'BUY_USDT',
+      status: 'awaiting_office_visit',
+      clientPayoutAddress: PAYOUT_ADDRESS,
+    }));
+    const buyDb = createDb(buyTx);
+
+    await expect(
+      setManagerOrderStatusInDb(buyDb, {
+        publicId: 'E97010',
+        actorId: 'manager-1',
+        status: 'ready_for_cash_payout',
+        now: NOW,
+      }),
+    ).rejects.toThrow('BUY_USDT orders cannot move to cash payout status');
+
+    expect(buyTx.order.update).not.toHaveBeenCalled();
+    expect(buyTx.auditLog.create).not.toHaveBeenCalled();
+
+    const sellTx = createTx(createOrder({
+      publicId: 'E74737',
+      direction: 'SELL_USDT',
+      status: 'funds_detected',
+      clientPayoutAddress: null,
+    }));
+    const sellDb = createDb(sellTx);
+
+    await expect(
+      setManagerOrderStatusInDb(sellDb, {
+        publicId: 'E74737',
+        actorId: 'manager-1',
+        status: 'ready_for_crypto_payout',
+        now: NOW,
+      }),
+    ).rejects.toThrow('SELL_USDT orders cannot move to crypto payout status');
+
+    expect(sellTx.order.update).not.toHaveBeenCalled();
+    expect(sellTx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('does not let managers mutate terminal orders from history', async () => {
+    const tx = createTx(createOrder({
+      direction: 'SELL_USDT',
+      status: 'completed',
+      clientPayoutAddress: null,
+    }));
+    const db = createDb(tx);
+
+    await expect(
+      setManagerOrderStatusInDb(db, {
+        publicId: 'E74737',
+        actorId: 'manager-1',
+        status: 'manager_review',
+        now: NOW,
+      }),
+    ).rejects.toThrow('terminal orders cannot be changed by manager status update');
+
+    expect(tx.order.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it('returns not found when manager changes an unknown order', async () => {
     const tx = createTx(null);
     const db = createDb(tx);
